@@ -29,7 +29,7 @@ async function calibrate(coords) {
   try {
     state.weather = await fetchWeather(coords.lat, coords.lon);
     state.clamps = calculateClamps(state.weather);
-    state.engine = new Engine(state.clamps);
+    state.engine = new Engine(state.clamps, coords);
     state.phase = 'calibration';
   } catch (err) {
     console.error('Cardinal calibration failed:', err);

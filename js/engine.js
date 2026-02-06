@@ -2,14 +2,49 @@ const LOOKAHEAD_MS = 100;
 const TICK_MS = 25;
 const BASE_NOTE = 220; // A3
 
+const SCALES = {
+  phrygian:       [0, 1, 3, 5, 7, 8, 10],
+  mixolydian:     [0, 2, 4, 5, 7, 9, 10],
+  dorian:         [0, 2, 3, 5, 7, 9, 10],
+  lydian:         [0, 2, 4, 6, 7, 9, 11],
+  wholeTone:      [0, 2, 4, 6, 8, 10],
+};
+
+function buildIntervals(scale) {
+  const intervals = [];
+  for (let oct = 0; oct < 2; oct++) {
+    for (const s of scale) intervals.push(s + oct * 12);
+  }
+  intervals.push(24);
+  return intervals;
+}
+
+function scaleFromLat(lat) {
+  const a = Math.abs(lat);
+  if (a > 60) return SCALES.wholeTone;
+  if (a > 45) return SCALES.lydian;
+  if (a > 30) return SCALES.dorian;
+  if (a > 15) return SCALES.mixolydian;
+  return SCALES.phrygian;
+}
+
 export class Engine {
-  constructor(clamps) {
+  constructor(clamps, coords) {
     this.ctx = null;
     this.clamps = clamps;
     this.running = false;
     this.muted = false;
     this.timerId = null;
     this.nextNoteTime = 0;
+
+    // Latitude → root note + scale
+    const rootShift = Math.round((Math.abs(coords.lat) / 90) * 7);
+    this.rootNote = BASE_NOTE * Math.pow(2, rootShift / 12);
+    this.scale = scaleFromLat(coords.lat);
+    this.intervals = buildIntervals(this.scale);
+
+    // Longitude → register shift (-12 to +12 semitones)
+    this.registerShift = Math.round((coords.lon / 180) * 12);
 
     // Active parameter values — start at midpoints
     this.params = {};
@@ -174,10 +209,9 @@ export class Engine {
     const variance = (Math.random() * 2 - 1) * this.params.velocity;
     const vel = Math.max(0.05, Math.min(1, baseVel + variance));
 
-    // Pick a note from a simple scale (A minor pentatonic spread)
-    const intervals = [0, 3, 5, 7, 10, 12, 15, 19, 24];
-    const semitone = intervals[Math.floor(Math.random() * intervals.length)];
-    const freq = BASE_NOTE * Math.pow(2, semitone / 12);
+    // Pick a note from location-derived scale and register
+    const semitone = this.intervals[Math.floor(Math.random() * this.intervals.length)] + this.registerShift;
+    const freq = this.rootNote * Math.pow(2, semitone / 12);
 
     this._voice(t, vel, freq);
 

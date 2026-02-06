@@ -1,9 +1,9 @@
-//import { DEV_MODE, devCoords } from '../dev.js';
+import { DEV_MODE, devCoords } from '../dev.js';
 
 export function getPosition() {
-	//if (DEV_MODE) {
-	//  return Promise.resolve(devCoords());
-	//}
+	if (DEV_MODE) {
+		return Promise.resolve(devCoords());
+	}
 
 	return new Promise((resolve, reject) => {
 		if (!navigator.geolocation) {
