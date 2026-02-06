@@ -69,6 +69,8 @@ export function initUI(state) {
 
       if (state.phase === 'denied') {
         drawDenied(p);
+      } else if (state.phase === 'fallback') {
+        drawFallback(p, state);
       } else if (state.phase === 'calibration') {
         drawCalibration(p, state);
       } else if (state.phase === 'instrument') {
@@ -78,7 +80,19 @@ export function initUI(state) {
       }
     };
 
+    let presetBtns = [];
+
     p.mousePressed = () => {
+      if (state.phase === 'fallback') {
+        for (const btn of presetBtns) {
+          if (p.mouseX >= btn.x && p.mouseX <= btn.x + btn.w &&
+              p.mouseY >= btn.y && p.mouseY <= btn.y + btn.h) {
+            state.continueWithCoords(btn.coords);
+            return;
+          }
+        }
+      }
+
       if (state.phase === 'calibration' && enterBtn) {
         if (p.mouseX >= enterBtn.x && p.mouseX <= enterBtn.x + enterBtn.w &&
             p.mouseY >= enterBtn.y && p.mouseY <= enterBtn.y + enterBtn.h) {
@@ -177,6 +191,47 @@ export function initUI(state) {
       p.textAlign(p.CENTER, p.CENTER);
       p.text('COORDINATES UNKNOWN', p.width / 2, p.height / 2 - 16);
       p.text('INSTRUMENT UNAVAILABLE', p.width / 2, p.height / 2 + 16);
+    }
+
+    function drawFallback(p, state) {
+      const cx = p.width / 2;
+      let y = p.height * 0.2;
+      const lh = 24;
+
+      p.fill(...TEXT_DIM);
+      p.textSize(12);
+      p.textAlign(p.CENTER, p.CENTER);
+      p.text('GEOLOCATION UNAVAILABLE', cx, y);
+      y += lh * 2;
+
+      p.fill(...TEXT_BRIGHT);
+      p.textSize(14);
+      p.text('SELECT COORDINATES', cx, y);
+      y += lh * 2;
+
+      presetBtns = [];
+      const bw = 200;
+      const bh = 36;
+      const names = Object.keys(state.presets);
+
+      for (let i = 0; i < names.length; i++) {
+        const name = names[i];
+        const bx = cx - bw / 2;
+        const by = y;
+
+        const hover = p.mouseX >= bx && p.mouseX <= bx + bw &&
+                      p.mouseY >= by && p.mouseY <= by + bh;
+
+        p.fill(...(hover ? TEXT_BRIGHT : GAUGE_BG));
+        p.rect(bx, by, bw, bh, 2);
+
+        p.fill(...(hover ? BG : AMBER));
+        p.textSize(12);
+        p.text(name, cx, by + bh / 2);
+
+        presetBtns.push({ x: bx, y: by, w: bw, h: bh, coords: state.presets[name] });
+        y += bh + 12;
+      }
     }
 
     function drawLoading(p) {
