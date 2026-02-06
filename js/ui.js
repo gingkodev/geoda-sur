@@ -49,6 +49,7 @@ export function initUI(state) {
   const s = (p) => {
     let sliders = [];
     let enterBtn = null;
+    let muteBtn = null;
     let scrollOffset = 0;
 
     p.setup = () => {
@@ -90,6 +91,14 @@ export function initUI(state) {
             state.continueWithCoords(btn.coords);
             return;
           }
+        }
+      }
+
+      if (state.phase === 'instrument' && muteBtn) {
+        if (p.mouseX >= muteBtn.x && p.mouseX <= muteBtn.x + muteBtn.w &&
+            p.mouseY >= muteBtn.y && p.mouseY <= muteBtn.y + muteBtn.h) {
+          state.engine.toggleMute();
+          return;
         }
       }
 
@@ -269,6 +278,25 @@ export function initUI(state) {
       for (const sl of sliders) {
         drawSlider(p, sl);
       }
+
+      // Mute button top-right
+      const bw = 80;
+      const bh = 28;
+      const bx = p.width - bw - 20;
+      const by = 14;
+      muteBtn = { x: bx, y: by, w: bw, h: bh };
+
+      const muted = state.engine.muted;
+      const hover = p.mouseX >= bx && p.mouseX <= bx + bw &&
+                    p.mouseY >= by && p.mouseY <= by + bh;
+
+      p.fill(...(hover ? TEXT_BRIGHT : GAUGE_BG));
+      p.rect(bx, by, bw, bh, 2);
+
+      p.fill(...(muted ? AMBER : TEXT_DIM));
+      p.textSize(10);
+      p.textAlign(p.CENTER, p.CENTER);
+      p.text(muted ? 'MUTED' : 'MUTE', bx + bw / 2, by + bh / 2);
 
       p.pop();
     }

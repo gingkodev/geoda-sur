@@ -7,6 +7,7 @@ export class Engine {
     this.ctx = null;
     this.clamps = clamps;
     this.running = false;
+    this.muted = false;
     this.timerId = null;
     this.nextNoteTime = 0;
 
@@ -23,6 +24,12 @@ export class Engine {
     this.running = true;
     this.nextNoteTime = this.ctx.currentTime + 0.1;
     this._tick();
+  }
+
+  toggleMute() {
+    this.muted = !this.muted;
+    this.masterGain.gain.value = this.muted ? 0 : 0.35;
+    return this.muted;
   }
 
   stop() {
