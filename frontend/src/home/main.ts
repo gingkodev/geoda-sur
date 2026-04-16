@@ -257,8 +257,7 @@ function enterMobileView() {
 	// Kill list view if active
 	const listView = document.getElementById("list-view");
 	if (listView) {
-		listView.classList.add("hidden");
-		listView.classList.remove("flex");
+		listView.style.display = "none";
 		const listCols = document.getElementById("list-columns");
 		if (listCols) listCols.innerHTML = "";
 	}
@@ -687,14 +686,12 @@ function toggleView() {
 		viewMode = "scroll";
 		noLoop();
 		if (canvas) canvas.style.display = "none";
-		listView.classList.remove("hidden");
-		listView.classList.add("flex");
+		listView.style.display = "flex";
 		if (coordsDisplay) coordsDisplay.style.display = "none";
 		buildListView();
 	} else {
 		viewMode = "map";
-		listView.classList.add("hidden");
-		listView.classList.remove("flex");
+		listView.style.display = "none";
 		document.getElementById("list-columns")!.innerHTML = "";
 		if (canvas) canvas.style.display = "block";
 		if (coordsDisplay) coordsDisplay.style.display = "";
