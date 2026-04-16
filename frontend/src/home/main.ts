@@ -108,6 +108,11 @@ if (listNav) {
 	});
 }
 
+// Register service worker for banco image caching
+if ("serviceWorker" in navigator) {
+	navigator.serviceWorker.register("/sw.js").catch(() => {});
+}
+
 // --- Fetch data + image manifest, then build ---
 Promise.all([
 	getFeed(0, 60),
@@ -117,6 +122,17 @@ Promise.all([
 		feedData = res.data;
 		bancoImages = manifest;
 		applyView();
+
+		// Pre-cache all banco images in the background via service worker
+		if (manifest.length && "caches" in window) {
+			caches.open("cardinal-banco-v1").then((cache) => {
+				for (const src of manifest) {
+					cache.match(src).then((hit) => {
+						if (!hit) fetch(src).catch(() => {});
+					});
+				}
+			});
+		}
 	})
 	.catch((err) => {
 		console.error("Feed fetch failed:", err);

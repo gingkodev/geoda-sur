@@ -20,8 +20,11 @@ app.use(express.json());
 // Uploads (persisted user content) — always served from public/uploads
 app.use("/uploads", express.static(path.join(__dirname, "..", "public", "uploads")));
 
-// Banco images (portfolio image bank)
-app.use("/banco", express.static(path.join(__dirname, "..", "random-imgs", "banco-imagenes")));
+// Banco images (portfolio image bank) — immutable hashed filenames, cache aggressively
+app.use("/banco", express.static(path.join(__dirname, "..", "random-imgs", "banco-imagenes"), {
+  maxAge: "30d",
+  immutable: true,
+}));
 
 // Admin SPA
 app.use("/admin", express.static(path.join(__dirname, "..", "admin")));
