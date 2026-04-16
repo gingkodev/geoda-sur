@@ -1,7 +1,13 @@
 services:
+  app:
+    env_file: !override
+      - /etc/cardinal.env
+
   nginx:
     profiles:
       - production
 
   db:
     ports: !override []
+    env_file: !override
+      - /etc/cardinal.env
