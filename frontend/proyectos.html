@@ -8,7 +8,7 @@
 </head>
 <body class="h-screen overflow-hidden" style="background:#f5f3ef">
   <!-- Fixed project list + nav (desktop) -->
-  <div id="sidebar" class="fixed right-0 top-0 bottom-0 w-56 z-[100] flex flex-col items-start pt-10 px-8 max-md:hidden">
+  <div id="sidebar" class="fixed right-0 top-0 bottom-0 w-56 z-[100] flex flex-col items-start pt-10 px-8 max-md:hidden" style="display:none">
     <a href="/" id="sidebar-home" class="text-[10px] tracking-wider uppercase no-underline text-cream mb-6 nav-link px-1 py-0.5">Inicio</a>
     <nav id="project-list" class="flex flex-col items-start gap-0.5"></nav>
   </div>
@@ -17,7 +17,7 @@
   <!-- <div id="nav" class="hidden max-md:block max-md:w-full max-md:bg-cream max-md:z-50"></div> -->
 
   <!-- Mobile: fixed project nav overlay (top-right, over hero image) -->
-  <div id="mobile-project-nav" class="flex md:hidden fixed right-0 top-0 z-[150] flex-col items-end pt-6 pr-5 pl-8 pb-4 gap-0.5 bg-ink/60">
+  <div id="mobile-project-nav" class="flex md:hidden fixed right-0 top-0 z-[150] flex-col items-end pt-6 pr-5 pl-8 pb-4 gap-0.5 bg-ink/60" style="display:none">
     <a href="/" id="mobile-home" class="text-[10px] tracking-wider uppercase no-underline text-cream px-1 py-0.5 mb-4">Inicio</a>
     <nav id="mobile-project-list" class="flex flex-col items-end gap-0.5"></nav>
   </div>
@@ -27,7 +27,7 @@
   </main>
 
   <!-- Mute button (fixed, bottom-left) -->
-  <button id="mute-btn" class="fixed bottom-5 left-5 z-[200] text-[10px] tracking-wider uppercase text-cream bg-ink/60 px-3 py-1.5 border border-cream/30 hover:bg-ink/80 transition-colors max-md:bottom-3 max-md:left-3"></button>
+  <button id="mute-btn" style="display:none" class="fixed bottom-5 left-5 z-[200] text-[10px] tracking-wider uppercase text-cream bg-ink/60 px-3 py-1.5 border border-cream/30 hover:bg-ink/80 transition-colors max-md:bottom-3 max-md:left-3"></button>
 
   <!-- Hidden audio element for playback -->
   <audio id="project-audio" preload="none"></audio>

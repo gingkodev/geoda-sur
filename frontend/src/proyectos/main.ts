@@ -365,6 +365,12 @@ function render(projects: Project[], services: Service[]) {
   });
 
   container.style.display = "";
+  const sidebar = document.getElementById("sidebar");
+  const mobileNav = document.getElementById("mobile-project-nav");
+  const muteEl = document.getElementById("mute-btn");
+  if (sidebar) sidebar.style.display = "";
+  if (mobileNav) mobileNav.style.display = "";
+  if (muteEl) muteEl.style.display = "";
 }
 
 // --- Active project + audio ---
