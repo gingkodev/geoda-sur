@@ -12,7 +12,7 @@ export function getLinks(): NavLink[] {
     { label: t("nav.services"), href: "/servicios" },
     { label: t("nav.blog"), href: "/blog" },
     { label: t("nav.rental"), href: "/rental" },
-    { label: t("nav.team"), href: "/equipo" },
+    { label: t("nav.training"), href: "/formacion" },
     { label: t("nav.contact"), href: "/contacto" },
   ];
 }
@@ -21,10 +21,10 @@ function langToggleHTML(): string {
   const esClass = currentLang === "es" ? "bg-ink text-cream" : "text-ink";
   const enClass = currentLang === "en" ? "bg-ink text-cream" : "text-ink";
   return `
-    <div class="flex gap-0 mt-6 text-[10px] tracking-wider uppercase">
-      <button data-switch-lang="es" class="lang-btn px-1.5 py-0.5 ${esClass}">ES</button>
+    <div class="flex items-center gap-0 mt-6 text-[10px] tracking-wider uppercase">
+      <button data-switch-lang="es" class="lang-btn min-w-[44px] min-h-[44px] flex items-center justify-center px-1.5 ${esClass}">ES</button>
       <span class="text-muted px-0.5">/</span>
-      <button data-switch-lang="en" class="lang-btn px-1.5 py-0.5 ${enClass}">EN</button>
+      <button data-switch-lang="en" class="lang-btn min-w-[44px] min-h-[44px] flex items-center justify-center px-1.5 ${enClass}">EN</button>
     </div>
   `;
 }
@@ -84,12 +84,12 @@ export function initMobileNav(container: HTMLElement | null) {
     <div class="flex items-center justify-between px-4 py-3">
       <a href="/" class="text-sm tracking-widest uppercase font-medium no-underline text-ink">Cardinal Sur</a>
       <div class="flex items-center gap-3">
-        <div class="flex gap-0 text-[10px] tracking-wider uppercase">
-          <button data-switch-lang="es" class="lang-btn px-1 py-0.5 ${esClass}">ES</button>
+        <div class="flex items-center gap-0 text-[10px] tracking-wider uppercase">
+          <button data-switch-lang="es" class="lang-btn min-w-[44px] min-h-[44px] flex items-center justify-center ${esClass}">ES</button>
           <span class="text-muted px-0.5">/</span>
-          <button data-switch-lang="en" class="lang-btn px-1 py-0.5 ${enClass}">EN</button>
+          <button data-switch-lang="en" class="lang-btn min-w-[44px] min-h-[44px] flex items-center justify-center ${enClass}">EN</button>
         </div>
-        <button id="hamburger" class="text-ink text-lg leading-none cursor-auto">&#9776;</button>
+        <button id="hamburger" class="text-ink text-lg leading-none cursor-auto min-w-[44px] min-h-[44px] flex items-center justify-center">&#9776;</button>
       </div>
     </div>
     <nav id="mobile-menu" class="hidden flex-col gap-2 px-4 pb-4">

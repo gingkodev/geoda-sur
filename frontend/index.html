@@ -33,11 +33,11 @@
   <!-- Mobile feed -->
   <div id="mobile-feed" class="hidden max-md:block fixed inset-0 overflow-hidden">
     <!-- Scrolling image column (left) -->
-    <div id="mobile-images" class="absolute left-0 top-0 bottom-0 w-[60%] overflow-hidden">
+    <div id="mobile-images" class="absolute left-0 top-0 bottom-0 overflow-hidden" style="right: max(40%, 160px)">
       <div id="mobile-track" class="flex flex-col gap-4 px-4"></div>
     </div>
     <!-- Fixed text (right) -->
-    <div id="mobile-text" class="absolute right-0 top-0 bottom-0 w-[40%] flex flex-col justify-center items-end pr-5 gap-10"></div>
+    <div id="mobile-text" class="absolute right-0 top-0 bottom-0 flex flex-col justify-center items-end pr-5 gap-10" style="width: max(40%, 160px)"></div>
     <p id="mobile-empty" class="hidden absolute inset-0 flex items-center justify-center text-muted text-xs">No items yet</p>
   </div>
 

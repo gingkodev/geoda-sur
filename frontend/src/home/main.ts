@@ -167,10 +167,10 @@ function renderMobile(data: FeedItem[]) {
         `<a href="${l.href}" class="text-xs tracking-widest uppercase no-underline text-ink">${l.label}</a>`
       ).join("\n      ")}
     </nav>
-    <div class="text-right flex justify-end gap-0 mt-2 text-[10px] tracking-wider uppercase">
-      <button data-switch-lang="es" class="lang-btn-mobile px-1 py-0.5 ${esClass}">ES</button>
+    <div class="text-right flex justify-end items-center gap-0 mt-2 text-[10px] tracking-wider uppercase">
+      <button data-switch-lang="es" class="lang-btn-mobile min-w-[44px] min-h-[44px] flex items-center justify-center ${esClass}">ES</button>
       <span class="text-muted px-0.5">/</span>
-      <button data-switch-lang="en" class="lang-btn-mobile px-1 py-0.5 ${enClass}">EN</button>
+      <button data-switch-lang="en" class="lang-btn-mobile min-w-[44px] min-h-[44px] flex items-center justify-center ${enClass}">EN</button>
     </div>
   `;
 

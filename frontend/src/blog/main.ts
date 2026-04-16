@@ -110,7 +110,7 @@ function renderMobileBlog(entries: BlogEntry[]) {
 	for (const entry of entries) {
 		const card = document.createElement("div");
 		const bgMap: Record<string, string> = { post: "#d4e8f5", audio: "#f5d0d0", note: "#f5f0a0" };
-		card.className = "p-3.5 text-[9px] leading-[13px] border border-transparent";
+		card.className = "p-3.5 text-[11px] leading-[15px] border border-transparent";
 		card.style.backgroundColor = bgMap[entry.type] ?? "#d4e8f5";
 		if (entry.slug) card.id = entry.slug;
 		card.innerHTML = `
@@ -430,7 +430,7 @@ function selectItem(index: number) {
 			el.style.zIndex = "100";
 			if (item.type !== "audio") {
 				el.style.height = "auto";
-				el.style.minWidth = "460px";
+				el.style.minWidth = "min(460px, calc(100vw - 40px))";
 				el.style.fontSize = "12px";
 				el.style.lineHeight = "18px";
 				el.style.padding = "20px";
