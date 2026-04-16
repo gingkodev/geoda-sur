@@ -113,6 +113,18 @@ if ("serviceWorker" in navigator) {
 	navigator.serviceWorker.register("/sw.js").catch(() => {});
 }
 
+// --- Geolocation: center map on user's position ---
+if ("geolocation" in navigator) {
+	navigator.geolocation.getCurrentPosition(
+		(pos) => {
+			offsetX = pos.coords.longitude * PIXELS_PER_DEGREE;
+			offsetY = -pos.coords.latitude * PIXELS_PER_DEGREE;
+		},
+		() => {}, // denied or failed — stay at 0,0
+		{ timeout: 5000 }
+	);
+}
+
 // --- Fetch data + image manifest, then build ---
 Promise.all([
 	getFeed(0, 60),
