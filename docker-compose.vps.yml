@@ -1,7 +1,13 @@
 services:
   app:
-    env_file: !override
-      - /etc/cardinal.env
+    env_file: !override []
+    environment:
+      DB_HOST: db
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
 
   nginx:
     profiles:
@@ -9,5 +15,9 @@ services:
 
   db:
     ports: !override []
-    env_file: !override
-      - /etc/cardinal.env
+    env_file: !override []
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
