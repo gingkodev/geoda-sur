@@ -20,6 +20,7 @@ export default defineConfig({
   },
   server: {
     host: true,
+    allowedHosts: ["cardinal.meteorobalboa.com"],
     proxy: {
       "/api": "http://localhost:3000",
       "/admin": "http://localhost:3000",
