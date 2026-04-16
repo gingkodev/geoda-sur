@@ -40,7 +40,7 @@ declare const key: string;
 let viewMode: "map" | "scroll" = "map";
 let offsetX = 0;
 let offsetY = 0;
-const zoom = 1;
+let zoom = 1;
 let isDragging = false;
 let lastMouseX = 0;
 let lastMouseY = 0;
@@ -487,7 +487,24 @@ if (window.innerWidth >= 768) {
 		lastMouseY = mouseY;
 	};
 
-	(window as any).mouseWheel = function() {
+	(window as any).mouseWheel = function(e: any) {
+		if (viewMode !== "map") return;
+		const zoomFactor = 0.05;
+		const minZoom = 0.3;
+		const maxZoom = 3;
+
+		// Zoom toward mouse position
+		const wx = (mouseX - width / 2) / zoom + offsetX;
+		const wy = (mouseY - height / 2) / zoom + offsetY;
+
+		const prevZoom = zoom;
+		zoom *= e.delta > 0 ? (1 - zoomFactor) : (1 + zoomFactor);
+		zoom = Math.max(minZoom, Math.min(maxZoom, zoom));
+
+		// Adjust offset so the point under the cursor stays put
+		offsetX = wx - (mouseX - width / 2) / zoom;
+		offsetY = wy - (mouseY - height / 2) / zoom;
+
 		return false;
 	};
 
@@ -496,6 +513,7 @@ if (window.innerWidth >= 768) {
 		if (key === "r" || key === "R") {
 			offsetX = 0;
 			offsetY = 0;
+			zoom = 1;
 		}
 	};
 
@@ -640,14 +658,6 @@ function drawLongitudeRuler() {
 	}
 	pop();
 
-	// Corner box
-	fill("#f5f3ef");
-	noStroke();
-	rect(0, 0, RULER_WIDTH, RULER_HEIGHT);
-	stroke(26);
-	strokeWeight(1);
-	line(RULER_WIDTH, 0, RULER_WIDTH, RULER_HEIGHT);
-	line(0, RULER_HEIGHT, RULER_WIDTH, RULER_HEIGHT);
 }
 
 function drawScaleBar() {
