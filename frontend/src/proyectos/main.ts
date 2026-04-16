@@ -160,6 +160,7 @@ function render(projects: Project[], services: Service[]) {
   if (!projects.length) {
     emptyEl.textContent = t("projects.empty");
     emptyEl.classList.remove("hidden");
+    container.style.display = "";
     return;
   }
 
@@ -362,6 +363,8 @@ function render(projects: Project[], services: Service[]) {
     document.getElementById(slug)?.scrollIntoView({ behavior: "smooth" });
     setActiveProject(slug, projects);
   });
+
+  container.style.display = "";
 }
 
 // --- Active project + audio ---
@@ -459,5 +462,6 @@ Promise.all([getProjects(), getServices()])
   .then(([projects, services]) => render(projects, services))
   .catch((err) => {
     console.error("Projects fetch failed:", err);
+    container.style.display = "";
     emptyEl.classList.remove("hidden");
   });

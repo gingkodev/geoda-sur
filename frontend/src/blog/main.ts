@@ -80,12 +80,14 @@ getBlog(0, 40)
 	.then((res) => {
 		if (isMobile) {
 			renderMobileBlog(res.data);
+			document.getElementById("mobile-blog")!.style.display = "block";
 			if (location.hash) {
 				const target = document.getElementById(location.hash.slice(1));
 				if (target) target.scrollIntoView({ behavior: "smooth" });
 			}
 		} else {
 			buildBlogItems(res.data);
+			if (viewportEl) viewportEl.style.display = "";
 			if (location.hash) {
 				const slug = location.hash.slice(1);
 				const idx = res.data.findIndex((e) => e.slug === slug);
@@ -96,6 +98,7 @@ getBlog(0, 40)
 	.catch((err) => {
 		console.error("Blog fetch failed:", err);
 		if (isMobile) {
+			document.getElementById("mobile-blog")!.style.display = "block";
 			document.getElementById("mobile-blog-empty")!.classList.remove("hidden");
 		}
 	});

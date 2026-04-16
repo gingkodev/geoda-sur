@@ -10,7 +10,7 @@
   <div id="nav" class="fixed right-10 top-1/2 -translate-y-1/2 z-[1000] max-md:static max-md:translate-y-0 max-md:top-0 max-md:right-0 max-md:w-full max-md:bg-cream max-md:z-50"></div>
 
   <!-- Desktop: pannable viewport with doodle canvas -->
-  <div id="viewport" class="fixed inset-0 z-[1] overflow-hidden max-md:hidden">
+  <div id="viewport" class="fixed inset-0 z-[1] overflow-hidden max-md:hidden" style="display: none;">
     <div id="world" class="absolute top-1/2 left-1/2 w-0 h-0 will-change-transform"></div>
   </div>
 
@@ -19,7 +19,7 @@
   <div id="coords-display" class="fixed bottom-5 right-10 text-[10px] tracking-wider z-[1000] pointer-events-none opacity-70 max-md:hidden"></div>
 
   <!-- Mobile: vertical card stack -->
-  <div id="mobile-blog" class="hidden max-md:block px-4 py-4">
+  <div id="mobile-blog" class="px-4 py-4" style="display: none;">
     <div id="mobile-blog-cards" class="flex flex-col gap-4"></div>
     <p id="mobile-blog-empty" class="hidden text-center text-muted text-xs py-12">No blog entries yet</p>
   </div>

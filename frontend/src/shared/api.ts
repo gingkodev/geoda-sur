@@ -61,10 +61,23 @@ function addLang(url: string): string {
 	return `${url}${sep}${langParam}`;
 }
 
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 async function get<T>(url: string): Promise<T> {
-	const res = await fetch(addLang(url));
+	const fullUrl = addLang(url);
+	const cacheKey = `api_cache:${fullUrl}`;
+	const cached = sessionStorage.getItem(cacheKey);
+	if (cached) {
+		const { data, timestamp } = JSON.parse(cached);
+		if (Date.now() - timestamp < CACHE_TTL) return data as T;
+	}
+	const res = await fetch(fullUrl);
 	if (!res.ok) throw new Error(`GET ${url} → ${res.status}`);
-	return res.json();
+	const data = await res.json();
+	try {
+		sessionStorage.setItem(cacheKey, JSON.stringify({ data, timestamp: Date.now() }));
+	} catch { /* storage full, no-op */ }
+	return data;
 }
 
 export function getFeed(offset = 0, limit = 40): Promise<FeedResponse> {

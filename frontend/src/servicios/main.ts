@@ -12,6 +12,7 @@ if (isMobile) {
   initNav(document.getElementById("nav"));
 }
 
+const mainEl = document.getElementById("services-main")!;
 const tocEl = document.getElementById("toc")!;
 const container = document.getElementById("services-container")!;
 const emptyEl = document.getElementById("services-empty")!;
@@ -27,6 +28,7 @@ function slugify(name: string): string {
 function renderServices(services: Service[]) {
   if (!services.length) {
     emptyEl.classList.remove("hidden");
+    mainEl.style.display = "";
     return;
   }
 
@@ -61,11 +63,14 @@ function renderServices(services: Service[]) {
     const target = document.getElementById(location.hash.slice(1));
     if (target) target.scrollIntoView({ behavior: "smooth" });
   }
+
+  mainEl.style.display = "";
 }
 
 getServices()
   .then(renderServices)
   .catch((err) => {
     console.error("Services fetch failed:", err);
+    mainEl.style.display = "";
     emptyEl.classList.remove("hidden");
   });

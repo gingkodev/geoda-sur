@@ -165,6 +165,7 @@ function renderMobile(data: FeedItem[]) {
 
 	textPanel.innerHTML = `
     <div class="text-right">
+      <img src="/logo-cardinal.webp" alt="Cardinal Sur" class="w-[44px] h-[44px] ml-auto mb-1" />
       <div class="text-sm tracking-widest uppercase font-medium leading-tight">Cardinal</div>
       <div class="text-sm tracking-widest uppercase font-medium leading-tight">Sur</div>
     </div>
@@ -339,6 +340,12 @@ function buildCanvasItems(data: FeedItem[]) {
 		});
 		separateItems();
 
+		// Reveal desktop UI now that items are placed
+		const compassEl2 = document.getElementById("compass");
+		const canvasUiEl = document.getElementById("canvas-ui");
+		if (compassEl2) compassEl2.style.display = "";
+		if (canvasUiEl) canvasUiEl.style.display = "";
+
 		// Restore view mode that was saved before a lang switch
 		const savedView = sessionStorage.getItem("home_view_mode");
 		sessionStorage.removeItem("home_view_mode");
@@ -422,6 +429,7 @@ if (window.innerWidth >= 768) {
 
 	(window as any).draw = function() {
 		background("#f5f3ef");
+		if (!items.length) return;
 		drawItems();
 		if (hoveredItem !== null) drawCrosshairLines(items[hoveredItem]);
 		drawLatitudeRuler();
