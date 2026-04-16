@@ -8,11 +8,12 @@ services:
       - .:/app
       - /app/node_modules
       - ./public/uploads:/app/public/uploads
-    env_file:
-      - path: .env
-        required: false
     environment:
-      - DB_HOST=db
+      DB_HOST: db
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
     depends_on:
       db:
         condition: service_healthy
@@ -21,9 +22,11 @@ services:
     image: mysql:8.4
     ports:
       - "3306:3306"
-    env_file:
-      - path: .env
-        required: false
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
     volumes:
       - db_data:/var/lib/mysql
       - ./db_build.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
