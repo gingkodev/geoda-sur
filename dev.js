@@ -1,4 +1,4 @@
-export const DEV_MODE = false;
+export const DEV_MODE = true;
 
 const PRESETS = {
 	reykjavik: { lat: 64.1466, lon: -21.9426 },

@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CARDINAL SUR</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+</head>
+<body class="overflow-hidden">
+  <!-- Mobile nav (hidden — nav is inline in the mobile feed) -->
+  <div id="nav" class="hidden"></div>
+
+  <!-- Logo (always on top) -->
+  <img id="compass" src="/logo-cardinal.webp" alt="Cardinal Sur" class="fixed top-5 right-5 w-[60px] h-[60px] z-[2000] cursor-pointer max-md:hidden" />
+
+  <!-- Canvas UI (desktop) -->
+  <div id="canvas-ui" class="max-md:hidden">
+    <div id="coords-display" class="fixed bottom-5 right-5 text-[11px] tracking-wider z-[1000] pointer-events-none">
+      <span class="lat text-ink">0°00'00" N</span>
+      <span class="lon text-ink ml-3">0°00'00" E</span>
+    </div>
+  </div>
+
+  <!-- List view (scroll view, desktop) -->
+  <div id="list-view" class="hidden fixed inset-0 bg-cream z-[500] overflow-hidden max-md:hidden">
+    <div id="list-columns" class="flex flex-1 gap-4 px-4 py-4 h-full"></div>
+    <div id="list-sidebar" class="w-56 shrink-0 flex flex-col items-start pt-16 pr-8 pl-4 gap-8">
+      <div class="text-sm tracking-widest text-ink uppercase">Cardinal Sur</div>
+      <nav id="list-nav" class="flex flex-col gap-3"></nav>
+    </div>
+  </div>
+
+  <!-- Mobile feed -->
+  <div id="mobile-feed" class="hidden max-md:block fixed inset-0 overflow-hidden">
+    <!-- Scrolling image column (left) -->
+    <div id="mobile-images" class="absolute left-0 top-0 bottom-0 w-[60%] overflow-hidden">
+      <div id="mobile-track" class="flex flex-col gap-4 px-4"></div>
+    </div>
+    <!-- Fixed text (right) -->
+    <div id="mobile-text" class="absolute right-0 top-0 bottom-0 w-[40%] flex flex-col justify-center items-end pr-5 gap-10"></div>
+    <p id="mobile-empty" class="hidden absolute inset-0 flex items-center justify-center text-muted text-xs">No items yet</p>
+  </div>
+
+  <script type="module" src="/src/home/main.ts"></script>
+</body>
+</html>

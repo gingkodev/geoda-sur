@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>CARDINAL SUR — Blog</title>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+	<style>
+		@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500&display=swap');
+
+		* {
+			margin: 0;
+			padding: 0;
+			box-sizing: border-box;
+		}
+
+		html,
+		body {
+			overflow: hidden;
+			background: #f5f3ef;
+			font-family: 'IBM Plex Mono', monospace;
+			cursor: none;
+		}
+
+		canvas {
+			display: block;
+			position: fixed;
+			top: 0;
+			left: 0;
+			z-index: 0;
+			pointer-events: none;
+		}
+
+		#custom-cursor {
+			position: fixed;
+			top: 0;
+			left: 0;
+			z-index: 10000;
+			pointer-events: none;
+			will-change: transform;
+		}
+
+		/* --- Pannable world layer --- */
+		#viewport {
+			position: fixed;
+			inset: 0;
+			z-index: 1;
+			overflow: hidden;
+		}
+
+		#world {
+			position: absolute;
+			top: 50%;
+			left: 50%;
+			width: 0;
+			height: 0;
+			will-change: transform;
+		}
+
+		/* --- Cards --- */
+		.card {
+			position: absolute;
+			font-size: 9px;
+			line-height: 13px;
+			padding: 14px;
+			overflow: hidden;
+			transition: border 0.15s, background-color 0.15s;
+			border: 1px solid transparent;
+			user-select: none;
+		}
+
+		.card:not(.selected):hover {
+			background-color: #f5f3ef !important;
+			border: 1px dashed rgba(26, 26, 26, 0.6);
+		}
+
+		.card.selected {
+			z-index: 100;
+		}
+
+		.card.selected:not([data-type="project"]) {
+			height: auto !important;
+			min-width: 460px;
+			font-size: 12px;
+			line-height: 18px;
+			padding: 20px;
+			user-select: text;
+		}
+
+		.card.hidden-card {
+			opacity: 0;
+			pointer-events: none;
+			transition: opacity 0.25s;
+		}
+
+		.card-header {
+			display: flex;
+			justify-content: space-between;
+			align-items: flex-start;
+			margin-bottom: 2px;
+		}
+
+		.card-meta-right {
+			text-align: right;
+		}
+
+		.card-author {
+			margin-top: 2px;
+		}
+
+		.card-body {
+			margin-top: 7px;
+			overflow: hidden;
+		}
+
+		.card-highlight-line {
+			background: #f5f0a0;
+			display: inline;
+			padding: 0 2px;
+		}
+
+		.card-highlight-underline {
+			border-bottom: 1px solid #c9a000;
+			display: inline;
+		}
+
+		/* Project card audio bar */
+		.card-player {
+			position: absolute;
+			bottom: 14px;
+			left: 14px;
+			right: 14px;
+			display: flex;
+			align-items: center;
+			gap: 10px;
+		}
+
+		.play-btn {
+			width: 0;
+			height: 0;
+			border-left: 10px solid #1a1a1a;
+			border-top: 6px solid transparent;
+			border-bottom: 6px solid transparent;
+			flex-shrink: 0;
+			cursor: pointer;
+		}
+
+		.progress-line {
+			flex: 1;
+			height: 1px;
+			background: #1a1a1a;
+		}
+
+		/* --- Fixed UI --- */
+		#nav-menu {
+			position: fixed;
+			top: 50%;
+			right: 40px;
+			transform: translateY(-50%);
+			z-index: 1000;
+			text-align: left;
+			font-size: 13px;
+			letter-spacing: 0.5px;
+		}
+
+		#nav-menu .brand {
+			font-weight: 500;
+			margin-bottom: 28px;
+			font-size: 14px;
+		}
+
+		#nav-menu ul {
+			list-style: none;
+		}
+
+		#nav-menu ul li {
+			margin: 7px 0;
+			cursor: none;
+			padding: 2px 5px;
+			margin-left: -5px;
+		}
+
+		#nav-menu ul li:hover {
+			background: #1a1a1a;
+			color: #f5f3ef;
+		}
+
+		#compass {
+			position: fixed;
+			top: 30px;
+			right: 40px;
+			width: 58px;
+			height: 58px;
+			z-index: 1000;
+			pointer-events: none;
+		}
+
+		#coords-display {
+			position: fixed;
+			bottom: 20px;
+			right: 40px;
+			font-size: 10px;
+			letter-spacing: 0.5px;
+			z-index: 1000;
+			pointer-events: none;
+			opacity: 0.7;
+		}
+	</style>
+</head>
+
+<body>
+	<svg id="custom-cursor" width="24" height="24" viewBox="0 0 24 24" style="mix-blend-mode: difference;">
+		<polygon points="0,0 0,17 4,10 12,12" fill="#ffffff" />
+	</svg>
+
+	<div id="viewport">
+		<div id="world"></div>
+	</div>
+
+	<nav id="nav-menu">
+		<div class="brand">CARDINAL SUR</div>
+		<ul>
+			<li>PROYECTOS</li>
+			<li>SERVICIOS</li>
+			<li>BLOG</li>
+			<li>FORMACION</li>
+			<li>EQUIPO</li>
+			<li>CONTACTO</li>
+		</ul>
+	</nav>
+
+	<svg id="compass" viewBox="0 0 100 100">
+		<g transform="translate(50,50)">
+			<line x1="0" y1="-40" x2="0" y2="-25" stroke="#1a1a1a" stroke-width="1.5" />
+			<line x1="0" y1="40" x2="0" y2="25" stroke="#1a1a1a" stroke-width="1" />
+			<line x1="-40" y1="0" x2="-25" y2="0" stroke="#1a1a1a" stroke-width="1" />
+			<line x1="40" y1="0" x2="25" y2="0" stroke="#1a1a1a" stroke-width="1" />
+			<line x1="-28" y1="-28" x2="-18" y2="-18" stroke="#1a1a1a" stroke-width="0.5" />
+			<line x1="28" y1="-28" x2="18" y2="-18" stroke="#1a1a1a" stroke-width="0.5" />
+			<line x1="-28" y1="28" x2="-18" y2="18" stroke="#1a1a1a" stroke-width="0.5" />
+			<line x1="28" y1="28" x2="18" y2="18" stroke="#1a1a1a" stroke-width="0.5" />
+			<polygon points="0,-45 -4,-38 0,-40 4,-38" fill="#1a1a1a" />
+			<circle cx="0" cy="0" r="2" fill="#1a1a1a" />
+			<text x="0" y="52" text-anchor="middle" font-family="IBM Plex Mono" font-size="8"
+				fill="#1a1a1a">S</text>
+		</g>
+	</svg>
+
+	<div id="coords-display">14°00'58" S, 58°22'03.7" O</div>
+
+	<script>
+		// --- State ---
+		let offsetX = 0;
+		let offsetY = 0;
+		let targetOffsetX = 0;
+		let targetOffsetY = 0;
+		let isDragging = false;
+		let lastMouseX, lastMouseY;
+
+		let items = [];
+		let cardEls = [];
+		let selectedItem = null;
+		let doodles = [];
+		let audioElements = {};
+
+		const worldEl = document.getElementById('world');
+		const viewportEl = document.getElementById('viewport');
+		const cursorEl = document.getElementById('custom-cursor');
+
+		// --- Content templates ---
+		const loremShort = "LOREM IPSUM DOLOR SIT AMET, CONS ECTETUER ADIPISCING ELIT, SED DIAM NONUMMY NIBH EUISMOD TINCIDUNT UT LAOREET DOLORE MAGNA ALIQUAM ERAT VOLUTPAT.";
+		const loremMed = "ARTICULO CARDINAL SUR: AREA DE FORMACIÓN. INFO SOBRE PROXIMOS TALLERES LOREM IPSUM DOLOR SIT AMET, CONSECTETUER ADIPISCING ELIT, SED DIAM NONUMMY NIBH EUISMOD TINCIDUNT UT LAOREET DOLORE MAGNA ALIQUAM ERAT VOLUTPAT. UT WISI ENIM AD MINIM VENIAM, QUIS NOSTRUD EXERCI TATION ULLAMCORPER SUSCIPIT LOBORTIS NISL UT ALIQUIP EX EA COMMODO CONSEQUAT.";
+		const loremLong = "ARTICULO CARDINAL SUR: AREA DE DIRECCIÓN. INFO SOBRE PROXIMOS TALLERES LOREM IPSUM DOLOR SIT AMET, CONSECTETUER ADIPISCING ELIT, SED DIAM NONUMMY NIBH EUISMOD TINCIDUNT UT LAOREET DOLORE MAGNA ALIQUAM ERAT VOLUTPAT. UT WISI ENIM AD MINIM VENIAM, QUIS NOSTRUD EXERCI TATION ULLAMCORPER SUSCIPIT LOBORTIS NISL UT ALIQUIP EX EA COMMODO CONSEQUAT. DUIS AUTEM VEL EUM IRIURE DOLOR IN HENDRERIT IN VULPUTATE VELIT ESSE MOLESTIE CONSEQUAT, VEL ILLUM DOLORE EU FEUGIAT NULLA FACILISIS AT VERO EROS ET ACCUMSAN ET IUSTO ODIO DIGNISSIM QUI BLANDIT PRAESENT LUPTATUM ZZRIL DELENIT AUGUE DUIS DOLORE TE FEUGAIT NULLA FACILISI.";
+
+		const categories = ["DIRECCIÓN MUSICAL CREATIVA", "FORMACIÓN", "PRODUCCIÓN", "SONIDO"];
+		const authors = ["X CRUZ", "X EMMA HARUMI", "X EMILIA INES VEGA", "X DANIEL ROSA"];
+		const clients = ["ACRU", "LA PLAZUELA", "SARAMALACARA", "NOCHE POLAR", "VECINO STUDIOS"];
+
+		const itemTypes = [
+			{type: 'article', bgColor: '#d4e8f5', w: 368, h: 207},
+			{type: 'article', bgColor: '#d4e8f5', w: 460, h: 253},
+			{type: 'article', bgColor: '#d4e8f5', w: 322, h: 184},
+			{type: 'rental', bgColor: '#c8e6c8', w: 253, h: 161},
+			{type: 'rental', bgColor: '#c8e6c8', w: 276, h: 184},
+			{type: 'project', bgColor: '#f5d0d0', w: 350, h: 72},
+			{type: 'project', bgColor: '#f5d0d0', w: 350, h: 72},
+			{type: 'highlight', bgColor: '#f5f0a0', w: 322, h: 138},
+			{type: 'highlight', bgColor: '#f5f0a0', w: 368, h: 115},
+		];
+
+		// --- Custom cursor ---
+		document.addEventListener('mousemove', (e) => {
+			cursorEl.style.transform = `translate(${e.clientX}px, ${e.clientY}px)`;
+		});
+
+		// --- p5.js: doodles only ---
+		function setup() {
+			let c = createCanvas(windowWidth, windowHeight);
+			c.style('position', 'fixed');
+			c.style('top', '0');
+			c.style('left', '0');
+			c.style('z-index', '0');
+			c.style('pointer-events', 'none');
+
+			generateItems(14);
+			generateDoodles();
+			renderCards();
+
+			// Don't call noCursor here — handled via CSS
+		}
+
+		function draw() {
+			clear();
+
+			// Smooth camera
+			offsetX += (targetOffsetX - offsetX) * 0.12;
+			offsetY += (targetOffsetY - offsetY) * 0.12;
+
+			// Update world container position
+			worldEl.style.transform = `translate(${-offsetX}px, ${-offsetY}px)`;
+
+			// Draw doodles on canvas
+			drawDoodles();
+
+			// Update coords
+			updateCoords();
+		}
+
+		// --- Doodle generation ---
+		function poissonDiskSampling(w, h, minDist, k = 30) {
+			let grid = [];
+			let cellSize = minDist / Math.sqrt(2);
+			let cols = Math.ceil(w / cellSize);
+			let rows = Math.ceil(h / cellSize);
+
+			for (let i = 0; i < cols * rows; i++) grid[i] = null;
+
+			let active = [];
+			let points = [];
+
+			let x0 = random(w);
+			let y0 = random(h);
+			let i0 = Math.floor(x0 / cellSize);
+			let j0 = Math.floor(y0 / cellSize);
+
+			let p0 = {x: x0, y: y0};
+			points.push(p0);
+			active.push(p0);
+			grid[i0 + j0 * cols] = p0;
+
+			while (active.length > 0) {
+				let randIdx = Math.floor(random(active.length));
+				let pos = active[randIdx];
+				let found = false;
+
+				for (let n = 0; n < k; n++) {
+					let ang = random(TWO_PI);
+					let r = random(minDist, minDist * 2);
+					let x = pos.x + r * Math.cos(ang);
+					let y = pos.y + r * Math.sin(ang);
+
+					if (x < 0 || x >= w || y < 0 || y >= h) continue;
+
+					let col = Math.floor(x / cellSize);
+					let row = Math.floor(y / cellSize);
+
+					let ok = true;
+					for (let di = -1; di <= 1; di++) {
+						for (let dj = -1; dj <= 1; dj++) {
+							let ni = col + di;
+							let nj = row + dj;
+							if (ni >= 0 && ni < cols && nj >= 0 && nj < rows) {
+								let neighbor = grid[ni + nj * cols];
+								if (neighbor) {
+									let dx = neighbor.x - x;
+									let dy = neighbor.y - y;
+									if (dx * dx + dy * dy < minDist * minDist) {
+										ok = false;
+									}
+								}
+							}
+						}
+					}
+
+					if (ok) {
+						let np = {x, y};
+						points.push(np);
+						active.push(np);
+						grid[col + row * cols] = np;
+						found = true;
+						break;
+					}
+				}
+
+				if (!found) {
+					active.splice(randIdx, 1);
+				}
+			}
+
+			return points;
+		}
+
+		function generateDoodles() {
+			doodles = [];
+			let points = poissonDiskSampling(2400, 1800, 250);
+
+			const doodleTypes = [
+				'triangle-outline', 'triangle-filled',
+				'circle-outline', 'circle-filled',
+				'double-circle-dot', 'small-dot'
+			];
+
+			for (let pt of points) {
+				doodles.push({
+					x: pt.x - 1200,
+					y: pt.y - 900,
+					type: random(doodleTypes),
+					size: random(9, 18),
+					rotation: random(TWO_PI)
+				});
+			}
+		}
+
+		function drawDoodles() {
+			let alpha = selectedItem !== null ? 80 : 255;
+
+			for (let d of doodles) {
+				let sx = (d.x - offsetX) + width / 2;
+				let sy = (d.y - offsetY) + height / 2;
+
+				if (sx < -50 || sx > width + 50 || sy < -50 || sy > height + 50) continue;
+
+				push();
+				translate(sx, sy);
+				rotate(d.rotation);
+
+				stroke(0, alpha);
+				strokeWeight(1);
+				noFill();
+
+				switch (d.type) {
+					case 'triangle-outline':
+						triangle(-d.size / 2, d.size / 3, d.size / 2, d.size / 3, 0, -d.size / 2);
+						break;
+					case 'triangle-filled':
+						fill(0, alpha);
+						noStroke();
+						triangle(-d.size / 2, d.size / 3, d.size / 2, d.size / 3, 0, -d.size / 2);
+						break;
+					case 'circle-outline':
+						ellipse(0, 0, d.size, d.size);
+						break;
+					case 'circle-filled':
+						fill(0, alpha);
+						noStroke();
+						ellipse(0, 0, d.size * 0.4, d.size * 0.4);
+						break;
+					case 'double-circle-dot':
+						ellipse(0, 0, d.size, d.size);
+						ellipse(d.size * 0.5, 0, d.size * 0.6, d.size * 0.6);
+						fill(0, alpha);
+						noStroke();
+						ellipse(d.size * 0.5, 0, d.size * 0.2, d.size * 0.2);
+						break;
+					case 'small-dot':
+						fill(0, alpha);
+						noStroke();
+						ellipse(0, 0, d.size * 0.3, d.size * 0.3);
+						break;
+				}
+
+				pop();
+			}
+		}
+
+		// --- Item data generation ---
+		function generateDate() {
+			let day = String(Math.floor(random(1, 29))).padStart(2, '0');
+			let month = String(Math.floor(random(1, 13))).padStart(2, '0');
+			let year = random() > 0.5 ? '25' : '24';
+			return `${day}/${month}/${year}`;
+		}
+
+		function generateItems(count) {
+			items = [];
+			for (let i = 0; i < count; i++) {
+				let template = random(itemTypes);
+				let r = Math.pow(random(), 0.5) * 600 + 100;
+				let angle = random(TWO_PI);
+
+				items.push({
+					x: cos(angle) * r,
+					y: sin(angle) * r,
+					w: template.w + random(-20, 20),
+					h: template.h + random(-10, 10),
+					type: template.type,
+					bgColor: template.bgColor,
+					id: i,
+					date: generateDate(),
+					category: random(categories),
+					author: random(authors),
+					client: random(clients),
+					text: template.type === 'highlight' ? loremShort : (template.w > 300 ? loremLong : loremMed)
+				});
+			}
+			separateItems();
+		}
+
+		function separateItems() {
+			let maxPasses = 80;
+			for (let pass = 0; pass < maxPasses; pass++) {
+				let moved = false;
+				for (let i = 0; i < items.length; i++) {
+					for (let j = i + 1; j < items.length; j++) {
+						let a = items[i];
+						let b = items[j];
+						let pad = 35;
+
+						let ox1 = Math.max(a.x - pad, b.x - pad);
+						let oy1 = Math.max(a.y - pad, b.y - pad);
+						let ox2 = Math.min(a.x + a.w + pad, b.x + b.w + pad);
+						let oy2 = Math.min(a.y + a.h + pad, b.y + b.h + pad);
+
+						if (ox2 <= ox1 || oy2 <= oy1) continue;
+
+						let overlapX = ox2 - ox1;
+						let overlapY = oy2 - oy1;
+						let pushX = 0, pushY = 0;
+
+						if (overlapX < overlapY) {
+							pushX = (overlapX * 0.55) * (a.x < b.x ? -1 : 1);
+						} else {
+							pushY = (overlapY * 0.55) * (a.y < b.y ? -1 : 1);
+						}
+
+						a.x += pushX; a.y += pushY;
+						b.x -= pushX; b.y -= pushY;
+						moved = true;
+					}
+				}
+				if (!moved) break;
+			}
+		}
+
+		// --- DOM card rendering ---
+		function renderCards() {
+			worldEl.innerHTML = '';
+			cardEls = [];
+
+			for (let i = 0; i < items.length; i++) {
+				let item = items[i];
+				let el = document.createElement('div');
+				el.className = 'card';
+				el.dataset.index = i;
+				el.dataset.type = item.type;
+				el.style.left = item.x + 'px';
+				el.style.top = item.y + 'px';
+				el.style.width = Math.round(item.w) + 'px';
+				el.style.height = Math.round(item.h) + 'px';
+				el.style.backgroundColor = item.bgColor;
+
+				el.innerHTML = buildCardHTML(item, false);
+
+				el.addEventListener('click', (e) => {
+					e.stopPropagation();
+					selectItem(i);
+				});
+
+				worldEl.appendChild(el);
+				cardEls.push(el);
+			}
+		}
+
+		function buildCardHTML(item, expanded) {
+			switch (item.type) {
+				case 'article': return buildArticleHTML(item, expanded);
+				case 'rental': return buildRentalHTML(item, expanded);
+				case 'project': return buildProjectHTML(item, expanded);
+				case 'highlight': return buildHighlightHTML(item, expanded);
+			}
+		}
+
+		function buildArticleHTML(item, expanded) {
+			return `
+				<div class="card-header">
+					<span>${item.date}</span>
+					<div class="card-meta-right">
+						<div>${item.category}</div>
+						<div class="card-author">${item.author}</div>
+					</div>
+				</div>
+				<div class="card-body">${expanded ? item.text : truncate(item.text, 120)}</div>
+			`;
+		}
+
+		function buildRentalHTML(item, expanded) {
+			let body = expanded ? loremLong : truncate(loremShort, 80);
+			return `
+				<div class="card-header">
+					<span>${item.date}</span>
+					<div class="card-meta-right">
+						<div>RENTAL</div>
+						<div class="card-author">${item.author}</div>
+					</div>
+				</div>
+				<div class="card-body">${body}</div>
+			`;
+		}
+
+		function buildProjectHTML(item) {
+			return `
+				<div class="card-header">
+					<span>${item.date}</span>
+					<div class="card-meta-right">
+						<div>PROYECTOS</div>
+						<div class="card-author">CLIENTE: ${item.client}</div>
+					</div>
+				</div>
+				<div class="card-player">
+					<div class="play-btn"></div>
+					<div class="progress-line"></div>
+				</div>
+			`;
+		}
+
+		function buildHighlightHTML(item, expanded) {
+			let body = expanded ? loremLong : truncate(loremShort, 100);
+			return `
+				<div class="card-body">${body}</div>
+			`;
+		}
+
+		function truncate(str, max) {
+			if (str.length <= max) return str;
+			return str.substring(0, max).trimEnd() + '...';
+		}
+
+		// --- Selection ---
+		function selectItem(index) {
+			selectedItem = index;
+			let item = items[index];
+
+			targetOffsetX = item.x + item.w / 2;
+			targetOffsetY = item.y + item.h / 2;
+
+			cardEls.forEach((el, i) => {
+				if (i === index) {
+					el.classList.add('selected');
+					el.classList.remove('hidden-card');
+					if (item.type !== 'project') {
+						el.innerHTML = buildCardHTML(item, true);
+					}
+				} else {
+					el.classList.add('hidden-card');
+				}
+			});
+
+			if (item.type === 'project') {
+				playAudio(item.id);
+			}
+		}
+
+		function deselectItem() {
+			if (selectedItem !== null) {
+				let item = items[selectedItem];
+				let el = cardEls[selectedItem];
+				if (item.type === 'project') {
+					stopAudio(item.id);
+				} else {
+					el.innerHTML = buildCardHTML(item, false);
+				}
+			}
+			selectedItem = null;
+
+			cardEls.forEach(el => {
+				el.classList.remove('selected', 'hidden-card');
+			});
+		}
+
+		// --- Audio ---
+		function playAudio(id) {
+			if (!audioElements[id]) {
+				audioElements[id] = new Audio('default.mp3');
+				audioElements[id].loop = true;
+			}
+			audioElements[id].play().catch(e => console.log('Audio play failed:', e));
+		}
+
+		function stopAudio(id) {
+			if (audioElements[id]) {
+				audioElements[id].pause();
+				audioElements[id].currentTime = 0;
+			}
+		}
+
+		// --- Coords display ---
+		function updateCoords() {
+			let wx = (mouseX - width / 2) + offsetX;
+			let wy = (mouseY - height / 2) + offsetY;
+			let lat = -wy / 100;
+			let lon = wx / 100;
+
+			let latDir = lat >= 0 ? 'S' : 'N';
+			let lonDir = lon >= 0 ? 'O' : 'E';
+			lat = Math.abs(lat);
+			lon = Math.abs(lon);
+
+			let latDeg = Math.floor(lat);
+			let latMin = Math.floor((lat - latDeg) * 60);
+			let latSec = ((lat - latDeg) * 60 - latMin) * 60;
+
+			let lonDeg = Math.floor(lon);
+			let lonMin = Math.floor((lon - lonDeg) * 60);
+			let lonSec = ((lon - lonDeg) * 60 - lonMin) * 60;
+
+			let str = `${latDeg}°${String(latMin).padStart(2, '0')}'${latSec.toFixed(0).padStart(2, '0')}" ${latDir}, ${lonDeg}°${String(lonMin).padStart(2, '0')}'${lonSec.toFixed(1).padStart(4, '0')}" ${lonDir}`;
+			document.getElementById('coords-display').textContent = str;
+		}
+
+		// --- Pan / drag (on viewport, not canvas) ---
+		viewportEl.addEventListener('mousedown', (e) => {
+			if (e.button !== 0) return;
+
+			if (selectedItem !== null) {
+				// Click outside selected card to deselect
+				let card = cardEls[selectedItem];
+				if (!card.contains(e.target)) {
+					deselectItem();
+				}
+				return;
+			}
+
+			// If clicking on a card, don't start dragging (card click handler fires)
+			if (e.target.closest('.card')) return;
+
+			isDragging = true;
+			lastMouseX = e.clientX;
+			lastMouseY = e.clientY;
+		});
+
+		window.addEventListener('mousemove', (e) => {
+			if (!isDragging) return;
+			let dx = e.clientX - lastMouseX;
+			let dy = e.clientY - lastMouseY;
+			targetOffsetX -= dx;
+			targetOffsetY -= dy;
+			offsetX = targetOffsetX;
+			offsetY = targetOffsetY;
+			lastMouseX = e.clientX;
+			lastMouseY = e.clientY;
+		});
+
+		window.addEventListener('mouseup', () => {
+			isDragging = false;
+		});
+
+		// --- Scroll to pan ---
+		viewportEl.addEventListener('wheel', (e) => {
+			if (selectedItem !== null) return;
+			e.preventDefault();
+			targetOffsetX += e.deltaX;
+			targetOffsetY += e.deltaY;
+		}, {passive: false});
+
+		// --- Keyboard ---
+		window.addEventListener('keydown', (e) => {
+			if (e.key === 'Escape') {
+				deselectItem();
+			}
+			if ((e.key === 'r' || e.key === 'R') && selectedItem === null) {
+				targetOffsetX = 0;
+				targetOffsetY = 0;
+			}
+			if ((e.key === 'g' || e.key === 'G') && selectedItem === null) {
+				generateItems(14);
+				generateDoodles();
+				renderCards();
+			}
+		});
+
+		function windowResized() {
+			resizeCanvas(windowWidth, windowHeight);
+		}
+	</script>
+</body>
+
+</html>

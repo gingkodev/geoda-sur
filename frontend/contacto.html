@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CARDINAL SUR — Contacto</title>
+</head>
+<body class="min-h-screen">
+  <div id="nav" class="fixed right-8 top-1/2 -translate-y-1/2 z-[1000] max-md:static max-md:translate-y-0 max-md:top-0 max-md:right-0 max-md:w-full max-md:bg-cream max-md:z-50"></div>
+
+  <main class="max-w-md mr-auto ml-6 md:pr-60 py-16 max-md:py-4 max-md:mx-auto max-md:px-4">
+    <h1 class="text-sm tracking-widest uppercase font-medium mb-10">Contacto</h1>
+    <form id="contact-form" class="flex flex-col gap-5">
+      <label class="flex flex-col gap-1">
+        <span class="text-[10px] tracking-wider uppercase text-muted">Nombre</span>
+        <input name="name" required
+          class="bg-transparent border border-ink/20 px-3 py-2 text-xs focus:outline-none focus:border-ink" />
+      </label>
+      <label class="flex flex-col gap-1">
+        <span class="text-[10px] tracking-wider uppercase text-muted">Email</span>
+        <input name="email" type="email" required
+          class="bg-transparent border border-ink/20 px-3 py-2 text-xs focus:outline-none focus:border-ink" />
+      </label>
+      <label class="flex flex-col gap-1">
+        <span class="text-[10px] tracking-wider uppercase text-muted">Mensaje</span>
+        <textarea name="message" rows="6" required
+          class="bg-transparent border border-ink/20 px-3 py-2 text-xs focus:outline-none focus:border-ink resize-none"></textarea>
+      </label>
+      <button type="submit"
+        class="self-start text-[10px] tracking-wider uppercase border border-ink px-4 py-2 hover:bg-ink hover:text-cream transition-colors">
+        Enviar
+      </button>
+      <p id="form-feedback" class="text-xs hidden"></p>
+    </form>
+  </main>
+
+  <script type="module" src="/src/contacto/main.ts"></script>
+</body>
+</html>

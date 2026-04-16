@@ -3,6 +3,7 @@ import { fetchWeather } from './weather.js';
 import { calculateClamps } from './clamp.js';
 import { Engine } from './engine.js';
 import { initUI } from './ui.js';
+import { DEV_MODE } from '../dev.js';
 
 const PRESETS = {
   'REYKJAVIK':  { lat: 64.1466, lon: -21.9426 },
@@ -20,10 +21,14 @@ const state = {
   engine: null,
   error: null,
   presets: PRESETS,
+  devMode: DEV_MODE,
   continueWithCoords: null,
 };
 
 async function calibrate(coords) {
+  if (state.engine) {
+    state.engine.stop();
+  }
   state.coords = coords;
   state.phase = 'loading';
   try {

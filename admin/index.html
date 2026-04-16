@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cardinal — Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet">
+  <script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        fontFamily: { mono: ['"IBM Plex Mono"', 'monospace'] },
+        extend: {
+          colors: {
+            paper: '#f5f3ef',
+            ink: '#1a1a1a',
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    input:focus, select:focus, input[type="file"]:focus { outline: 1px solid #1a1a1a; outline-offset: -1px; }
+    .tab-active { background: #1a1a1a; color: #f5f3ef; }
+    .upload-preview img { max-height: 80px; margin-top: 4px; }
+    .upload-status { font-size: 10px; margin-top: 2px; }
+    .lang-tab { padding: 2px 8px; font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase; cursor: pointer; border: 1px solid #1a1a1a; border-bottom: none; }
+    .lang-tab-active { background: #1a1a1a; color: #f5f3ef; }
+    .lang-tab-inactive { background: #f5f3ef; color: #999; }
+    .lang-missing { border-left: 2px solid #e5a000; }
+
+    /* Quill overrides to match aesthetic */
+    .ql-toolbar.ql-snow { border-color: #1a1a1a; background: #f5f3ef; font-family: 'IBM Plex Mono', monospace; }
+    .ql-container.ql-snow { border-color: #1a1a1a; font-family: 'IBM Plex Mono', monospace; font-size: 12px; }
+    .ql-editor { min-height: 120px; }
+    .ql-snow .ql-stroke { stroke: #1a1a1a; }
+    .ql-snow .ql-fill { fill: #1a1a1a; }
+    .ql-snow .ql-picker-label { color: #1a1a1a; }
+    .ql-snow .ql-active .ql-stroke { stroke: #666; }
+    .ql-snow .ql-active .ql-fill { fill: #666; }
+
+    /* Flash messages */
+    #flash-container { position: fixed; top: 12px; right: 12px; z-index: 100; display: flex; flex-direction: column; gap: 6px; }
+    .flash { font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.04em; padding: 8px 14px; border: 1px solid; max-width: 320px; opacity: 0; transform: translateX(20px); transition: opacity 0.2s, transform 0.2s; }
+    .flash.show { opacity: 1; transform: translateX(0); }
+    .flash.flash-ok { border-color: #1a1a1a; background: #1a1a1a; color: #f5f3ef; }
+    .flash.flash-err { border-color: #b91c1c; background: #fef2f2; color: #b91c1c; }
+  </style>
+</head>
+<body class="bg-paper text-ink font-mono min-h-screen">
+  <div id="flash-container"></div>
+
+  <!-- LOGIN -->
+  <div id="login-view" class="min-h-screen flex items-center justify-center">
+    <div class="w-72 space-y-6">
+      <h1 class="text-sm tracking-widest uppercase">Cardinal Admin</h1>
+      <div class="space-y-3">
+        <input id="login-email" type="email" placeholder="Email"
+          class="w-full bg-transparent border border-ink px-3 py-2 text-xs tracking-wide placeholder:text-neutral-400">
+        <input id="login-password" type="password" placeholder="Contraseña"
+          class="w-full bg-transparent border border-ink px-3 py-2 text-xs tracking-wide placeholder:text-neutral-400">
+      </div>
+      <button id="login-btn"
+        class="w-full border border-ink px-3 py-2 text-xs tracking-widest uppercase hover:bg-ink hover:text-paper transition-colors">
+        Ingresar
+      </button>
+      <p id="login-error" class="text-xs text-red-600 hidden"></p>
+    </div>
+  </div>
+
+  <!-- CMS -->
+  <div id="cms-view" class="hidden min-h-screen">
+    <!-- Header -->
+    <header class="border-b border-ink px-6 py-4 flex items-center justify-between">
+      <span class="text-sm tracking-widest uppercase">Cardinal Admin</span>
+      <div class="flex items-center gap-4">
+        <span id="user-name" class="text-xs text-neutral-500"></span>
+        <button id="logout-btn" class="text-xs tracking-wider uppercase hover:bg-ink hover:text-paper px-2 py-1 transition-colors">Salir</button>
+      </div>
+    </header>
+
+    <!-- Tabs -->
+    <nav class="border-b border-ink px-6 flex gap-0">
+      <button class="tab text-xs tracking-wider uppercase px-4 py-3 border-r border-ink tab-active" data-tab="projects">Proyectos</button>
+      <button class="tab text-xs tracking-wider uppercase px-4 py-3 border-r border-ink" data-tab="services">Servicios</button>
+      <button class="tab text-xs tracking-wider uppercase px-4 py-3 border-r border-ink" data-tab="blog">Blog</button>
+    </nav>
+
+    <!-- Content -->
+    <main class="px-6 py-6">
+      <!-- Projects panel -->
+      <section id="panel-projects" class="panel">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-xs tracking-widest uppercase">Proyectos</h2>
+          <button class="btn-new text-xs tracking-wider uppercase border border-ink px-3 py-1 hover:bg-ink hover:text-paper transition-colors" data-entity="projects">+ Nuevo</button>
+        </div>
+        <div id="list-projects" class="space-y-2"></div>
+      </section>
+
+      <!-- Services panel -->
+      <section id="panel-services" class="panel hidden">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-xs tracking-widest uppercase">Servicios</h2>
+          <button class="btn-new text-xs tracking-wider uppercase border border-ink px-3 py-1 hover:bg-ink hover:text-paper transition-colors" data-entity="services">+ Nuevo</button>
+        </div>
+        <div id="list-services" class="space-y-2"></div>
+      </section>
+
+      <!-- Blog panel -->
+      <section id="panel-blog" class="panel hidden">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-xs tracking-widest uppercase">Blog</h2>
+          <button class="btn-new text-xs tracking-wider uppercase border border-ink px-3 py-1 hover:bg-ink hover:text-paper transition-colors" data-entity="blog">+ Nuevo</button>
+        </div>
+        <div id="list-blog" class="space-y-2"></div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Edit modal -->
+  <div id="modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-ink/20 overflow-y-auto py-8">
+    <div class="bg-paper border border-ink w-full max-w-2xl p-6 space-y-4 my-auto">
+      <h3 id="modal-title" class="text-xs tracking-widest uppercase"></h3>
+      <div id="modal-fields" class="space-y-3"></div>
+      <div class="flex gap-3">
+        <button id="modal-save" class="text-xs tracking-wider uppercase border border-ink px-4 py-2 hover:bg-ink hover:text-paper transition-colors">Guardar</button>
+        <button id="modal-cancel" class="text-xs tracking-wider uppercase px-4 py-2 text-neutral-400 hover:text-ink transition-colors">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+const API = '/api';
+let token = localStorage.getItem('cardinal_token');
+let currentTab = 'projects';
+let modalEntity = null;
+let modalId = null;
+let quillInstances = {};
+
+// --- Flash ---
+function flash(msg, type = 'ok') {
+  const el = document.createElement('div');
+  el.className = `flash flash-${type}`;
+  el.textContent = msg;
+  document.getElementById('flash-container').appendChild(el);
+  requestAnimationFrame(() => el.classList.add('show'));
+  setTimeout(() => {
+    el.classList.remove('show');
+    setTimeout(() => el.remove(), 200);
+  }, 2500);
+}
+
+// --- Auth ---
+async function apiFetch(path, opts = {}) {
+  const headers = { 'Content-Type': 'application/json', ...opts.headers };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const res = await fetch(API + path, { ...opts, headers });
+  if (res.status === 401) { logout(); throw new Error('Unauthorized'); }
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    flash(body.error || `Error ${res.status}`, 'err');
+    throw new Error(body.error || `Error ${res.status}`);
+  }
+  return res;
+}
+
+document.getElementById('login-btn').addEventListener('click', login);
+document.getElementById('login-password').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
+
+async function login() {
+  const email = document.getElementById('login-email').value;
+  const password = document.getElementById('login-password').value;
+  const errEl = document.getElementById('login-error');
+  errEl.classList.add('hidden');
+
+  try {
+    const res = await fetch(API + '/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+    const data = await res.json();
+    if (!res.ok) { errEl.textContent = data.error; errEl.classList.remove('hidden'); return; }
+    token = data.token;
+    localStorage.setItem('cardinal_token', token);
+    showCMS(data.name);
+  } catch {
+    errEl.textContent = 'Error de conexión';
+    errEl.classList.remove('hidden');
+  }
+}
+
+function logout() {
+  token = null;
+  localStorage.removeItem('cardinal_token');
+  document.getElementById('cms-view').classList.add('hidden');
+  document.getElementById('login-view').classList.remove('hidden');
+}
+
+document.getElementById('logout-btn').addEventListener('click', logout);
+
+async function checkSession() {
+  if (!token) return;
+  try {
+    const res = await apiFetch('/auth/me');
+    if (res.ok) {
+      const user = await res.json();
+      showCMS(user.name);
+    }
+  } catch { /* token expirado, quedar en login */ }
+}
+
+function showCMS(name) {
+  document.getElementById('login-view').classList.add('hidden');
+  document.getElementById('cms-view').classList.remove('hidden');
+  document.getElementById('user-name').textContent = name;
+  loadTab(currentTab);
+}
+
+// --- Tabs ---
+document.querySelectorAll('.tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('tab-active'));
+    btn.classList.add('tab-active');
+    currentTab = btn.dataset.tab;
+    document.querySelectorAll('.panel').forEach(p => p.classList.add('hidden'));
+    document.getElementById('panel-' + currentTab).classList.remove('hidden');
+    loadTab(currentTab);
+  });
+});
+
+// --- CRUD ---
+const entityLabels = {
+  projects: { singular: 'proyecto', plural: 'proyectos' },
+  services: { singular: 'servicio', plural: 'servicios' },
+  blog: { singular: 'entrada', plural: 'blog' },
+};
+
+const schemas = {
+  projects: [
+    { key: 'name', label: 'Nombre', type: 'text', i18n: true },
+    { key: 'writeup', label: 'Descripción', type: 'richtext', i18n: true },
+    { key: 'img_url', label: 'Imagen', type: 'file', accept: 'image/*', uploadEndpoint: '/api/uploads/image' },
+    { key: 'audio_url', label: 'Audio', type: 'file', accept: 'audio/*', uploadEndpoint: '/api/uploads/audio' },
+    { key: 'service_ids', label: 'Servicios', type: 'multiselect', optionsEndpoint: '/services' },
+  ],
+  services: [
+    { key: 'name', label: 'Nombre', type: 'text', i18n: true },
+    { key: 'description', label: 'Descripción', type: 'richtext', i18n: true },
+  ],
+  blog: [
+    { key: 'title', label: 'Título', type: 'text', i18n: true },
+    { key: 'category', label: 'Categoría', type: 'text' },
+    { key: 'type', label: 'Tipo', type: 'select', options: ['post', 'audio', 'note'] },
+    { key: 'writeup', label: 'Contenido', type: 'richtext', i18n: true },
+    { key: 'audio_url', label: 'Audio', type: 'file', accept: 'audio/*', uploadEndpoint: '/api/uploads/audio', showWhen: { key: 'type', value: 'audio' } },
+  ],
+};
+
+async function loadTab(entity) {
+  const res = await apiFetch('/' + entity);
+  const json = await res.json();
+  const items = Array.isArray(json) ? json : json.data;
+  const list = document.getElementById('list-' + entity);
+  const labelKey = entity === 'blog' ? 'title' : 'name';
+
+  if (!items.length) {
+    list.innerHTML = '<p class="text-xs text-neutral-400">Sin entradas</p>';
+    return;
+  }
+
+  list.innerHTML = items.map(item => `
+    <div class="flex items-center justify-between border border-neutral-300 px-3 py-2">
+      <span class="text-xs">${esc(item[labelKey])}</span>
+      <div class="flex gap-2">
+        <button class="text-xs tracking-wider uppercase hover:bg-ink hover:text-paper px-2 py-0.5 transition-colors"
+          onclick="openModal('${entity}', ${item.id})">Editar</button>
+        <button class="text-xs tracking-wider uppercase text-red-600 hover:bg-red-600 hover:text-paper px-2 py-0.5 transition-colors"
+          onclick="deleteItem('${entity}', ${item.id})">Borrar</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function esc(str) {
+  const el = document.createElement('span');
+  el.textContent = str ?? '';
+  return el.innerHTML;
+}
+
+// --- Modal ---
+document.querySelectorAll('.btn-new').forEach(btn => {
+  btn.addEventListener('click', () => openModal(btn.dataset.entity, null));
+});
+
+async function openModal(entity, id) {
+  modalEntity = entity;
+  modalId = id;
+  quillInstances = {};
+  const schema = schemas[entity];
+  const labels = entityLabels[entity];
+  const title = id ? `Editar ${labels.singular}` : `Nuevo ${labels.singular}`;
+  document.getElementById('modal-title').textContent = title;
+
+  let data = {};
+  if (id) {
+    const res = await apiFetch(`/${entity}/${id}`);
+    data = await res.json();
+  }
+
+  const fieldsEl = document.getElementById('modal-fields');
+  fieldsEl.innerHTML = schema.map(f => {
+    const val = data[f.key] ?? '';
+    const valEn = data[f.key + '_en'] ?? '';
+    const hidden = f.showWhen ? ' hidden' : '';
+
+    // --- i18n wrapper: ES/EN tabs for translatable fields ---
+    if (f.i18n && f.type === 'text') {
+      const enMissing = !valEn ? ' lang-missing' : '';
+      return `<div data-field="${f.key}">
+        <label class="text-[10px] tracking-wider uppercase text-neutral-500 block mb-1">${f.label}</label>
+        <div class="flex gap-0 mb-1">
+          <button type="button" class="lang-tab lang-tab-active" data-lang-tab="${f.key}" data-lang="es">ES</button>
+          <button type="button" class="lang-tab lang-tab-inactive${enMissing}" data-lang-tab="${f.key}" data-lang="en">EN</button>
+        </div>
+        <input data-key="${f.key}" data-lang-input="${f.key}" data-lang="es" type="text" value="${esc(val)}"
+          class="w-full bg-transparent border border-ink px-3 py-2 text-xs tracking-wide">
+        <input data-key="${f.key}_en" data-lang-input="${f.key}" data-lang="en" type="text" value="${esc(valEn)}"
+          class="w-full bg-transparent border border-ink px-3 py-2 text-xs tracking-wide hidden"
+          placeholder="English translation">
+      </div>`;
+    }
+
+    if (f.i18n && f.type === 'richtext') {
+      const enMissing = !valEn ? ' lang-missing' : '';
+      return `<div data-field="${f.key}"${hidden ? ' class="hidden"' : ''}>
+        <label class="text-[10px] tracking-wider uppercase text-neutral-500 block mb-1">${f.label}</label>
+        <div class="flex gap-0 mb-1">
+          <button type="button" class="lang-tab lang-tab-active" data-lang-tab="${f.key}" data-lang="es">ES</button>
+          <button type="button" class="lang-tab lang-tab-inactive${enMissing}" data-lang-tab="${f.key}" data-lang="en">EN</button>
+        </div>
+        <div data-lang-input="${f.key}" data-lang="es"><div id="quill-${f.key}"></div></div>
+        <div data-lang-input="${f.key}" data-lang="en" class="hidden"><div id="quill-${f.key}_en"></div></div>
+      </div>`;
+    }
+
+    if (f.type === 'richtext') {
+      return `<div data-field="${f.key}"${hidden ? ' class="hidden"' : ''}>
+        <label class="text-[10px] tracking-wider uppercase text-neutral-500 block mb-1">${f.label}</label>
+        <div id="quill-${f.key}"></div>
+      </div>`;
+    }
+    if (f.type === 'select') {
+      return `<div data-field="${f.key}">
+        <label class="text-[10px] tracking-wider uppercase text-neutral-500 block mb-1">${f.label}</label>
+        <select data-key="${f.key}"
+          class="w-full bg-transparent border border-ink px-3 py-2 text-xs tracking-wide">
+          ${f.options.map(o => `<option value="${o}" ${data[f.key] === o ? 'selected' : ''}>${o}</option>`).join('')}
+        </select>
+      </div>`;
+    }
+    if (f.type === 'multiselect') {
+      return `<div data-field="${f.key}">
+        <label class="text-[10px] tracking-wider uppercase text-neutral-500 block mb-1">${f.label}</label>
+        <select data-key="${f.key}" multiple
+          class="w-full bg-transparent border border-ink px-3 py-2 text-xs tracking-wide min-h-[80px]">
+        </select>
+        <span class="text-[10px] text-neutral-400">Ctrl+click para seleccionar varios</span>
+      </div>`;
+    }
+    if (f.type === 'file') {
+      const isImage = f.accept.startsWith('image');
+      const preview = isImage && val
+        ? `<div class="upload-preview"><img src="${esc(val)}" alt="preview"></div>`
+        : (val ? `<span class="text-[10px] text-neutral-500">${esc(val.split('/').pop())}</span>` : '');
+      return `<div data-field="${f.key}"${hidden ? ' class="hidden"' : ''}>
+        <label class="text-[10px] tracking-wider uppercase text-neutral-500 block mb-1">${f.label}</label>
+        <input type="hidden" data-key="${f.key}" value="${esc(val)}">
+        <input type="file" data-upload-key="${f.key}" accept="${f.accept}"
+          data-endpoint="${f.uploadEndpoint}"
+          class="w-full bg-transparent border border-ink px-3 py-2 text-xs tracking-wide file:mr-3 file:border-0 file:bg-ink file:text-paper file:px-2 file:py-1 file:text-[10px] file:uppercase file:tracking-wider file:cursor-pointer">
+        <div id="upload-status-${f.key}" class="upload-status text-neutral-500">${preview}</div>
+      </div>`;
+    }
+    return `<div data-field="${f.key}">
+      <label class="text-[10px] tracking-wider uppercase text-neutral-500 block mb-1">${f.label}</label>
+      <input data-key="${f.key}" type="text" value="${esc(val)}"
+        class="w-full bg-transparent border border-ink px-3 py-2 text-xs tracking-wide">
+    </div>`;
+  }).join('');
+
+  // Init Quill instances (ES + EN for i18n fields)
+  const quillOpts = {
+    theme: 'snow',
+    modules: {
+      toolbar: [
+        ['bold', 'italic', 'underline'],
+        [{ 'header': [2, 3, false] }],
+        [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+        ['link'],
+        ['clean'],
+      ],
+    },
+  };
+
+  schema.filter(f => f.type === 'richtext').forEach(f => {
+    const q = new Quill(`#quill-${f.key}`, quillOpts);
+    if (data[f.key]) q.root.innerHTML = data[f.key];
+    quillInstances[f.key] = q;
+
+    if (f.i18n) {
+      const qEn = new Quill(`#quill-${f.key}_en`, quillOpts);
+      if (data[f.key + '_en']) qEn.root.innerHTML = data[f.key + '_en'];
+      quillInstances[f.key + '_en'] = qEn;
+    }
+  });
+
+  // Lang tab switching
+  fieldsEl.querySelectorAll('.lang-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      const fieldKey = tab.dataset.langTab;
+      const lang = tab.dataset.lang;
+
+      // Update tab styles
+      fieldsEl.querySelectorAll(`[data-lang-tab="${fieldKey}"]`).forEach(t => {
+        t.classList.remove('lang-tab-active');
+        t.classList.add('lang-tab-inactive');
+      });
+      tab.classList.remove('lang-tab-inactive');
+      tab.classList.add('lang-tab-active');
+
+      // Show/hide inputs
+      fieldsEl.querySelectorAll(`[data-lang-input="${fieldKey}"]`).forEach(el => {
+        if (el.dataset.lang === lang) el.classList.remove('hidden');
+        else el.classList.add('hidden');
+      });
+    });
+  });
+
+  // Populate multiselect fields
+  for (const f of schema.filter(f => f.type === 'multiselect')) {
+    const selectEl = fieldsEl.querySelector(`[data-key="${f.key}"]`);
+    const res = await apiFetch(f.optionsEndpoint);
+    const options = await res.json();
+    const selected = data[f.key] ?? [];
+    selectEl.innerHTML = options.map(o =>
+      `<option value="${o.id}" ${selected.includes(o.id) ? 'selected' : ''}>${esc(o.name)}</option>`
+    ).join('');
+  }
+
+  // File upload handlers
+  fieldsEl.querySelectorAll('input[type="file"]').forEach(input => {
+    input.addEventListener('change', async (e) => {
+      const fileInput = e.target;
+      const key = fileInput.dataset.uploadKey;
+      const endpoint = fileInput.dataset.endpoint;
+      const file = fileInput.files[0];
+      if (!file) return;
+
+      const statusEl = document.getElementById('upload-status-' + key);
+      statusEl.innerHTML = '<span class="text-neutral-400">Subiendo...</span>';
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      try {
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` },
+          body: formData,
+        });
+        if (!res.ok) throw new Error('Upload failed');
+        const result = await res.json();
+
+        const hiddenInput = fieldsEl.querySelector(`input[data-key="${key}"]`);
+        hiddenInput.value = result.url;
+
+        const isImage = fileInput.accept.startsWith('image');
+        if (isImage) {
+          statusEl.innerHTML = `<div class="upload-preview"><img src="${esc(result.url)}" alt="preview"></div>`;
+        } else {
+          statusEl.innerHTML = `<span class="text-[10px] text-neutral-500">${esc(file.name)}</span>`;
+        }
+      } catch (err) {
+        statusEl.innerHTML = '<span class="text-red-600">Error al subir</span>';
+      }
+    });
+  });
+
+  // Conditional field visibility (showWhen)
+  schema.filter(f => f.showWhen).forEach(f => {
+    const triggerEl = fieldsEl.querySelector(`[data-key="${f.showWhen.key}"]`);
+    const fieldWrapper = fieldsEl.querySelector(`[data-field="${f.key}"]`);
+    if (!triggerEl || !fieldWrapper) return;
+
+    const toggle = () => {
+      if (triggerEl.value === f.showWhen.value) fieldWrapper.classList.remove('hidden');
+      else fieldWrapper.classList.add('hidden');
+    };
+    triggerEl.addEventListener('change', toggle);
+    toggle(); // set initial state
+  });
+
+  document.getElementById('modal').classList.remove('hidden');
+}
+
+document.getElementById('modal-cancel').addEventListener('click', closeModal);
+document.getElementById('modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(); });
+
+function closeModal() {
+  document.getElementById('modal').classList.add('hidden');
+  quillInstances = {};
+  modalEntity = null;
+  modalId = null;
+}
+
+document.getElementById('modal-save').addEventListener('click', async () => {
+  const schema = schemas[modalEntity];
+  const body = {};
+  schema.forEach(f => {
+    if (f.type === 'richtext') {
+      const q = quillInstances[f.key];
+      const html = q.root.innerHTML;
+      body[f.key] = html === '<p><br></p>' ? null : html;
+      // EN version for i18n fields
+      if (f.i18n) {
+        const qEn = quillInstances[f.key + '_en'];
+        const htmlEn = qEn.root.innerHTML;
+        body[f.key + '_en'] = htmlEn === '<p><br></p>' ? null : htmlEn;
+      }
+    } else if (f.type === 'file') {
+      const el = document.querySelector(`#modal-fields input[data-key="${f.key}"]`);
+      body[f.key] = el.value || null;
+    } else {
+      const el = document.querySelector(`#modal-fields [data-key="${f.key}"]`);
+      body[f.key] = el.value || null;
+      // EN version for i18n text fields
+      if (f.i18n) {
+        const elEn = document.querySelector(`#modal-fields [data-key="${f.key}_en"]`);
+        body[f.key + '_en'] = elEn ? (elEn.value || null) : null;
+      }
+    }
+  });
+
+  // Extract multiselect values before sending (they're not part of the entity body)
+  const multiselectFields = {};
+  schema.filter(f => f.type === 'multiselect').forEach(f => {
+    const selectEl = document.querySelector(`#modal-fields [data-key="${f.key}"]`);
+    multiselectFields[f.key] = Array.from(selectEl.selectedOptions).map(o => Number(o.value));
+    delete body[f.key];
+  });
+
+  let entityId = modalId;
+  if (modalId) {
+    await apiFetch(`/${modalEntity}/${modalId}`, { method: 'PUT', body: JSON.stringify(body) });
+  } else {
+    const res = await apiFetch(`/${modalEntity}`, { method: 'POST', body: JSON.stringify(body) });
+    const created = await res.json();
+    entityId = created.id;
+  }
+
+  // Sync service links for projects
+  if (modalEntity === 'projects' && multiselectFields.service_ids) {
+    const wanted = multiselectFields.service_ids;
+    const existing = modalId ? (await (await apiFetch(`/projects/${entityId}`)).json()).service_ids : [];
+    const toAdd = wanted.filter(id => !existing.includes(id));
+    const toRemove = existing.filter(id => !wanted.includes(id));
+    for (const sid of toAdd) {
+      await apiFetch(`/projects/${entityId}/services`, { method: 'POST', body: JSON.stringify({ service_id: sid }) });
+    }
+    for (const sid of toRemove) {
+      await apiFetch(`/projects/${entityId}/services/${sid}`, { method: 'DELETE' });
+    }
+  }
+
+  const entity = modalEntity;
+  const label = entityLabels[entity].singular;
+  const wasNew = !modalId;
+  closeModal();
+  loadTab(entity);
+  flash(wasNew ? `${label} creado` : `${label} actualizado`);
+});
+
+async function deleteItem(entity, id) {
+  if (!confirm('¿Eliminar este elemento?')) return;
+  await apiFetch(`/${entity}/${id}`, { method: 'DELETE' });
+  loadTab(entity);
+  flash(`${entityLabels[entity].singular} eliminado`);
+}
+
+// --- Init ---
+checkSession();
+</script>
+</body>
+</html>

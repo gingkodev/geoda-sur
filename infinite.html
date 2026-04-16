@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>CARDINAL SUR</title>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+	<script src="https://cdn.tailwindcss.com"></script>
+	<style>
+		@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500&display=swap');
+
+		* {
+			margin: 0;
+			padding: 0;
+			box-sizing: border-box;
+		}
+
+		html,
+		body {
+			overflow: hidden;
+			background: #f5f3ef;
+			font-family: 'IBM Plex Mono', monospace;
+			cursor: none;
+		}
+
+		#custom-cursor {
+			position: fixed;
+			top: 0;
+			left: 0;
+			z-index: 10000;
+			pointer-events: none;
+			will-change: transform;
+			mix-blend-mode: difference;
+		}
+
+		canvas {
+			display: block;
+		}
+
+		#coords-display {
+			position: fixed;
+			bottom: 20px;
+			right: 20px;
+			/*background: rgba(255, 255, 255, 0.95);*/
+			/*border: 1px solid #1a1a1a;*/
+			padding: 12px 16px;
+			font-family: 'IBM Plex Mono', monospace;
+			font-size: 11px;
+			letter-spacing: 0.5px;
+			z-index: 1000;
+			pointer-events: none;
+		}
+
+		#coords-display .lat {
+			color: #1a1a1a;
+		}
+
+		#coords-display .lon {
+			color: #1a1a1a;
+			margin-left: 12px;
+		}
+
+		#compass {
+			position: fixed;
+			top: 20px;
+			right: 20px;
+			width: 60px;
+			height: 60px;
+			z-index: 1000;
+			pointer-events: none;
+		}
+
+		/* List view */
+		#list-view {
+			display: none;
+			position: fixed;
+			inset: 0;
+			background: #f5f3ef;
+			z-index: 500;
+			overflow: hidden;
+		}
+
+		#list-view.active {
+			display: flex;
+		}
+
+		.column-track {
+			overflow: hidden;
+			position: relative;
+		}
+
+		.column-inner {
+			display: flex;
+			flex-direction: column;
+			gap: 16px;
+			animation-timing-function: linear;
+			animation-iteration-count: infinite;
+		}
+
+		.column-track:hover .column-inner {
+			animation-play-state: paused;
+		}
+
+		@keyframes scroll-up {
+			0% {
+				transform: translateY(0);
+			}
+
+			100% {
+				transform: translateY(-50%);
+			}
+		}
+
+		@keyframes scroll-down {
+			0% {
+				transform: translateY(-50%);
+			}
+
+			100% {
+				transform: translateY(0);
+			}
+		}
+
+		.list-item {
+			border: 1px solid #1a1a1a;
+			background: #fff;
+			flex-shrink: 0;
+		}
+
+		.list-item-lines {
+			width: 100%;
+			display: flex;
+			flex-direction: column;
+			gap: 4px;
+			padding: 10px;
+		}
+
+		.list-item-line {
+			height: 1px;
+			background: #b4b4b4;
+		}
+
+		.nav-link:hover {
+			background: #1a1a1a;
+			color: #f5f3ef !important;
+		}
+	</style>
+</head>
+
+<body>
+	<svg id="custom-cursor" width="24" height="24" viewBox="0 0 24 24">
+		<polygon points="0,0 0,17 4,10 12,12" fill="#ffffff" />
+	</svg>
+	<div id="coords-display">
+		<span class="lat">0°00'00" N</span>
+		<span class="lon">0°00'00" E</span>
+	</div>
+
+	<svg id="compass" viewBox="0 0 100 100">
+		<g transform="translate(50,50)">
+			<!-- Main compass points -->
+			<line x1="0" y1="-40" x2="0" y2="-25" stroke="#1a1a1a" stroke-width="1.5" />
+			<line x1="0" y1="40" x2="0" y2="25" stroke="#1a1a1a" stroke-width="1" />
+			<line x1="-40" y1="0" x2="-25" y2="0" stroke="#1a1a1a" stroke-width="1" />
+			<line x1="40" y1="0" x2="25" y2="0" stroke="#1a1a1a" stroke-width="1" />
+			<!-- Diagonal points -->
+			<line x1="-28" y1="-28" x2="-18" y2="-18" stroke="#1a1a1a" stroke-width="0.5" />
+			<line x1="28" y1="-28" x2="18" y2="-18" stroke="#1a1a1a" stroke-width="0.5" />
+			<line x1="-28" y1="28" x2="-18" y2="18" stroke="#1a1a1a" stroke-width="0.5" />
+			<line x1="28" y1="28" x2="18" y2="18" stroke="#1a1a1a" stroke-width="0.5" />
+			<!-- North arrow -->
+			<polygon points="0,-45 -4,-38 0,-40 4,-38" fill="#1a1a1a" />
+			<!-- Center dot -->
+			<circle cx="0" cy="0" r="2" fill="#1a1a1a" />
+			<!-- S label -->
+			<text x="0" y="48" text-anchor="middle" font-family="IBM Plex Mono" font-size="8"
+				fill="#1a1a1a">S</text>
+		</g>
+	</svg>
+
+	<div id="list-view">
+		<div id="list-columns" class="flex flex-1 gap-4 px-4 py-4 h-full"></div>
+		<div id="list-sidebar" class="w-56 flex-shrink-0 flex flex-col items-start pt-16 pr-8 pl-4 gap-8">
+			<div class="text-sm tracking-widest text-[#1a1a1a] uppercase"
+				style="font-family: 'IBM Plex Mono', monospace;">Cardinal Sur</div>
+			<nav class="flex flex-col gap-3" style="font-family: 'IBM Plex Mono', monospace;">
+				<a
+					class="nav-link text-xs tracking-wider text-[#1a1a1a] uppercase cursor-pointer px-1 py-0.5 -ml-1">Proyectos</a>
+				<a
+					class="nav-link text-xs tracking-wider text-[#1a1a1a] uppercase cursor-pointer px-1 py-0.5 -ml-1">Servicios</a>
+				<a
+					class="nav-link text-xs tracking-wider text-[#1a1a1a] uppercase cursor-pointer px-1 py-0.5 -ml-1">Blog</a>
+				<a
+					class="nav-link text-xs tracking-wider text-[#1a1a1a] uppercase cursor-pointer px-1 py-0.5 -ml-1">Rental</a>
+				<a
+					class="nav-link text-xs tracking-wider text-[#1a1a1a] uppercase cursor-pointer px-1 py-0.5 -ml-1">Equipo</a>
+				<a
+					class="nav-link text-xs tracking-wider text-[#1a1a1a] uppercase cursor-pointer px-1 py-0.5 -ml-1">Contacto</a>
+			</nav>
+		</div>
+	</div>
+
+	<script>
+		// View mode
+		let viewMode = 'canvas'; // 'canvas' or 'list'
+
+		// Canvas state
+		let offsetX = 0;
+		let offsetY = 0;
+		let zoom = 1;
+		let isDragging = false;
+		let lastMouseX, lastMouseY;
+
+		// Items on canvas
+		let items = [];
+		let hoveredItem = null;
+
+		// Ruler dimensions
+		const RULER_WIDTH = 50;
+		const RULER_HEIGHT = 30;
+
+		// Coordinate system settings
+		// Map canvas pixels to lat/long
+		// 1 degree = 100 pixels at zoom 1
+		const PIXELS_PER_DEGREE = 30;
+
+		const cursorEl = document.getElementById('custom-cursor');
+		document.addEventListener('mousemove', (e) => {
+			cursorEl.style.transform = `translate(${e.clientX}px, ${e.clientY}px)`;
+		});
+
+		function setup() {
+			createCanvas(windowWidth, windowHeight);
+			textFont('IBM Plex Mono');
+			// Generate random items
+			generateItems(15);
+		}
+
+		function generateItems(count) {
+			items = [];
+			for (let i = 0; i < count; i++) {
+				let r = Math.pow(random(), 0.6) * 800;
+				let angle = random(TWO_PI);
+				let titles = [
+					'Untitled survey', 'Field sketch no. 7', 'Archival fragment',
+					'Site panorama', 'Coastal transect', 'Elevation study',
+					'Grid reference B4', 'Quadrant overlap', 'Bore sample 12',
+					'Contour detail', 'Waypoint marker', 'Drift measurement',
+					'Boundary trace', 'Sounding plate', 'Lichen coverage'
+				];
+				items.push({
+					x: cos(angle) * r,
+					y: sin(angle) * r,
+					w: random(60, 180),
+					h: random(50, 140),
+					id: i,
+					title: titles[i % titles.length]
+				});
+			}
+			separateItems();
+		}
+
+		function separateItems() {
+			// Push apart any pair overlapping more than 25% by area
+			let maxPasses = 50;
+			for (let pass = 0; pass < maxPasses; pass++) {
+				let moved = false;
+				for (let i = 0; i < items.length; i++) {
+					for (let j = i + 1; j < items.length; j++) {
+						let a = items[i];
+						let b = items[j];
+
+						// Intersection rect
+						let ox1 = Math.max(a.x, b.x);
+						let oy1 = Math.max(a.y, b.y);
+						let ox2 = Math.min(a.x + a.w, b.x + b.w);
+						let oy2 = Math.min(a.y + a.h, b.y + b.h);
+
+						if (ox2 <= ox1 || oy2 <= oy1) continue; // no overlap
+
+						let overlapArea = (ox2 - ox1) * (oy2 - oy1);
+						let smallerArea = Math.min(a.w * a.h, b.w * b.h);
+
+						if (overlapArea / smallerArea <= 0.25) continue; // within tolerance
+
+						// Push apart along the axis of least overlap
+						let overlapX = ox2 - ox1;
+						let overlapY = oy2 - oy1;
+
+						let pushX = 0, pushY = 0;
+						if (overlapX < overlapY) {
+							pushX = (overlapX * 0.6) * (a.x < b.x ? -1 : 1);
+						} else {
+							pushY = (overlapY * 0.6) * (a.y < b.y ? -1 : 1);
+						}
+
+						a.x += pushX;
+						a.y += pushY;
+						b.x -= pushX;
+						b.y -= pushY;
+						moved = true;
+					}
+				}
+				if (!moved) break;
+			}
+		}
+
+		function worldToScreen(wx, wy) {
+			return {
+				x: (wx - offsetX) * zoom + width / 2,
+				y: (wy - offsetY) * zoom + height / 2
+			};
+		}
+
+		function screenToWorld(sx, sy) {
+			return {
+				x: (sx - width / 2) / zoom + offsetX,
+				y: (sy - height / 2) / zoom + offsetY
+			};
+		}
+
+		function pixelsToLatLong(wx, wy) {
+			// Convert world pixels to lat/long
+			// Y axis: positive = North, negative = South
+			// X axis: positive = East, negative = West
+			let lat = -wy / PIXELS_PER_DEGREE;
+			let lon = wx / PIXELS_PER_DEGREE;
+			return {lat, lon};
+		}
+
+		function formatDegrees(decimal, isLat) {
+			let dir = isLat ? (decimal >= 0 ? 'N' : 'S') : (decimal >= 0 ? 'E' : 'W');
+			decimal = Math.abs(decimal);
+			let deg = Math.floor(decimal);
+			let minFloat = (decimal - deg) * 60;
+			let min = Math.floor(minFloat);
+			let sec = Math.floor((minFloat - min) * 60);
+			return `${deg}°${String(min).padStart(2, '0')}'${String(sec).padStart(2, '0')}" ${dir}`;
+		}
+
+		function draw() {
+			background('#f5f3ef');
+
+			// Draw grid lines (subtle)
+			//drawGrid();
+
+			// Draw items
+			drawItems();
+
+			// Draw crosshair lines for hovered item
+			if (hoveredItem !== null) {
+				drawCrosshairLines(items[hoveredItem]);
+			}
+
+			// Draw rulers (on top)
+			drawLatitudeRuler();
+			drawLongitudeRuler();
+
+			// Draw scale bar
+			drawScaleBar();
+
+			// Update coords display
+			updateCoordsDisplay();
+		}
+
+		function drawGrid() {
+			stroke(200);
+			strokeWeight(0.5);
+
+			// Calculate visible area in world coords
+			let topLeft = screenToWorld(RULER_WIDTH, RULER_HEIGHT);
+			let bottomRight = screenToWorld(width, height);
+
+			let gridSpacing = PIXELS_PER_DEGREE * 5;
+
+			// Vertical lines
+			let startX = Math.floor(topLeft.x / gridSpacing) * gridSpacing;
+			for (let wx = startX; wx < bottomRight.x; wx += gridSpacing) {
+				let screen = worldToScreen(wx, 0);
+				if (screen.x > RULER_WIDTH) {
+					line(screen.x, RULER_HEIGHT, screen.x, height);
+				}
+			}
+
+			// Horizontal lines
+			let startY = Math.floor(topLeft.y / gridSpacing) * gridSpacing;
+			for (let wy = startY; wy < bottomRight.y; wy += gridSpacing) {
+				let screen = worldToScreen(0, wy);
+				if (screen.y > RULER_HEIGHT) {
+					line(RULER_WIDTH, screen.y, width, screen.y);
+				}
+			}
+		}
+
+		function drawItems() {
+			hoveredItem = null;
+
+			for (let i = 0; i < items.length; i++) {
+				let item = items[i];
+				let screen = worldToScreen(item.x, item.y);
+				let w = item.w * zoom;
+				let h = item.h * zoom;
+
+				// Check if mouse is over item
+				let isHovered = mouseX > screen.x && mouseX < screen.x + w &&
+					mouseY > screen.y && mouseY < screen.y + h;
+
+				if (isHovered && mouseX > RULER_WIDTH && mouseY > RULER_HEIGHT) {
+					hoveredItem = i;
+				}
+
+				// Draw item
+				push();
+				//if (isHovered) {
+				//	strokeWeight(2);
+				//} else {
+				strokeWeight(1);
+				//}
+				stroke(26);
+				fill(255);
+				rect(screen.x, screen.y, w, h);
+
+				// Draw inner detail lines (like placeholder)
+				stroke(180);
+				strokeWeight(0.5);
+				let padding = 8 * zoom;
+				for (let ly = screen.y + padding; ly < screen.y + h - padding; ly += 6 * zoom) {
+					line(screen.x + padding, ly, screen.x + w - padding, ly);
+				}
+				pop();
+			}
+		}
+
+		function drawCrosshairLines(item) {
+			let screen = worldToScreen(item.x, item.y);
+			let w = item.w * zoom;
+			let h = item.h * zoom;
+			let centerX = screen.x + w / 2;
+			let centerY = screen.y + h / 2;
+
+			stroke(26);
+			strokeWeight(1);
+
+			// Horizontal line through item center
+			line(0, centerY, width, centerY);
+
+			// Vertical line through item center
+			line(centerX, 0, centerX, height);
+
+			// Draw title + coordinate label to the right, straddling the horizontal line
+			let coords = pixelsToLatLong(item.x + item.w / 2, item.y + item.h / 2);
+			let coordLabel = `${formatDegrees(coords.lat, true)}, ${formatDegrees(coords.lon, false)}`;
+			let titleLabel = item.title || '';
+			let fullLabel = titleLabel.toUpperCase() + ' - ' + coordLabel;
+
+			push();
+			noStroke();
+			textAlign(LEFT);
+			// below the horizontal line
+			textSize(11);
+			fill(100);
+			text(fullLabel, screen.x + w + 14, centerY + 16);
+			pop();
+		}
+
+		function drawLatitudeRuler() {
+			// Left side ruler
+			push();
+			//fill('#f5f3ef');
+			//noStroke();
+			//rect(0, 0, RULER_WIDTH, height);
+			//
+			//stroke(26);
+			//strokeWeight(1);
+			//line(RULER_WIDTH, 0, RULER_WIDTH, height);
+
+			// Calculate visible latitude range
+			let topLeft = screenToWorld(0, RULER_HEIGHT);
+			let bottomRight = screenToWorld(0, height);
+
+			let degreeSpacing = 5;
+
+			// Draw latitude ticks
+			textSize(9);
+			textAlign(RIGHT, CENTER);
+			fill(26);
+			noStroke();
+
+			let startLat = Math.ceil(pixelsToLatLong(0, topLeft.y).lat / degreeSpacing) * degreeSpacing;
+			let endLat = Math.floor(pixelsToLatLong(0, bottomRight.y).lat / degreeSpacing) * degreeSpacing;
+
+			for (let lat = startLat; lat >= endLat; lat -= degreeSpacing) {
+				let wy = -lat * PIXELS_PER_DEGREE;
+				let screen = worldToScreen(0, wy);
+
+				if (screen.y > RULER_HEIGHT && screen.y < height) {
+					stroke(26);
+					strokeWeight(1);
+					line(RULER_WIDTH - 8, screen.y, RULER_WIDTH, screen.y);
+
+					noStroke();
+					let label = `${Math.abs(lat)}°${lat >= 0 ? ' N' : ' S'}`;
+					if (lat === 0) label = '0°';
+					text(label, RULER_WIDTH - 12, screen.y);
+				}
+			}
+			pop();
+		}
+
+		function drawLongitudeRuler() {
+			// Top ruler
+			push();
+			//fill('#f5f3ef');
+			//noStroke();
+			//rect(0, 0, width, RULER_HEIGHT);
+			//
+			//stroke(26);
+			//strokeWeight(1);
+			//line(0, RULER_HEIGHT, width, RULER_HEIGHT);
+			//
+			// Calculate visible longitude range
+			let topLeft = screenToWorld(RULER_WIDTH, 0);
+			let bottomRight = screenToWorld(width, 0);
+
+			let degreeSpacing = 5;
+
+			// Draw longitude ticks
+			textSize(9);
+			textAlign(CENTER, BOTTOM);
+			fill(26);
+			noStroke();
+
+			let startLon = Math.floor(pixelsToLatLong(topLeft.x, 0).lon / degreeSpacing) * degreeSpacing;
+			let endLon = Math.ceil(pixelsToLatLong(bottomRight.x, 0).lon / degreeSpacing) * degreeSpacing;
+
+			for (let lon = startLon; lon <= endLon; lon += degreeSpacing) {
+				let wx = lon * PIXELS_PER_DEGREE;
+				let screen = worldToScreen(wx, 0);
+
+				if (screen.x > RULER_WIDTH && screen.x < width) {
+					stroke(26);
+					strokeWeight(1);
+					line(screen.x, RULER_HEIGHT - 8, screen.x, RULER_HEIGHT);
+
+					noStroke();
+					let label = `${Math.abs(lon)}°${lon >= 0 ? 'E' : 'W'}`;
+					if (lon === 0) label = '0°';
+					text(label, screen.x, RULER_HEIGHT - 10);
+				}
+			}
+			pop();
+
+			// Corner box
+			fill('#f5f3ef');
+			noStroke();
+			rect(0, 0, RULER_WIDTH, RULER_HEIGHT);
+			stroke(26);
+			strokeWeight(1);
+			line(RULER_WIDTH, 0, RULER_WIDTH, RULER_HEIGHT);
+			line(0, RULER_HEIGHT, RULER_WIDTH, RULER_HEIGHT);
+		}
+
+		function updateCoordsDisplay() {
+			if (mouseX > RULER_WIDTH && mouseY > RULER_HEIGHT) {
+				let world = screenToWorld(mouseX, mouseY);
+				let coords = pixelsToLatLong(world.x, world.y);
+
+				document.querySelector('#coords-display .lat').textContent = formatDegrees(coords.lat, true);
+				document.querySelector('#coords-display .lon').textContent = formatDegrees(coords.lon, false);
+			}
+		}
+
+		function mousePressed() {
+			if (viewMode !== 'canvas') return;
+			if (mouseButton === LEFT) {
+				isDragging = true;
+				lastMouseX = mouseX;
+				lastMouseY = mouseY;
+			}
+		}
+
+		function mouseReleased() {
+			if (viewMode !== 'canvas') return;
+			isDragging = false;
+		}
+
+		function mouseDragged() {
+			if (viewMode !== 'canvas') return;
+			if (isDragging) {
+				let dx = (mouseX - lastMouseX) / zoom;
+				let dy = (mouseY - lastMouseY) / zoom;
+				offsetX -= dx;
+				offsetY -= dy;
+				lastMouseX = mouseX;
+				lastMouseY = mouseY;
+			}
+		}
+
+		function mouseWheel(event) {
+			// Zoom disabled — drag only
+			return false;
+		}
+
+		function drawScaleBar() {
+			// Pick a "nice" world-distance that fits roughly 80–160px on screen
+			let targetScreenPx = 120;
+			let worldPerPx = 1 / zoom;
+			let rawDegrees = (targetScreenPx * worldPerPx) / PIXELS_PER_DEGREE;
+
+			// Snap to a nice degree value
+			let niceSteps = [0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1, 5, 10, 15, 30, 45, 90];
+			let niceDeg = niceSteps[0];
+			for (let s of niceSteps) {
+				if (s <= rawDegrees * 1.5) niceDeg = s;
+			}
+
+			let barPx = niceDeg * PIXELS_PER_DEGREE * zoom;
+			let barX = 20;
+			let barY = height - 24;
+
+			push();
+			stroke(26);
+			strokeWeight(1);
+
+			// Horizontal bar
+			line(barX, barY, barX + barPx, barY);
+			// End caps
+			line(barX, barY - 4, barX, barY + 4);
+			line(barX + barPx, barY - 4, barX + barPx, barY + 4);
+
+			// Label
+			noStroke();
+			fill(26);
+			textSize(9);
+			textAlign(CENTER, BOTTOM);
+			let label = niceDeg >= 1 ? `${niceDeg}°` : `${(niceDeg * 60).toFixed(0)}'`;
+			text(label, barX + barPx / 2, barY - 6);
+			pop();
+		}
+
+		function windowResized() {
+			resizeCanvas(windowWidth, windowHeight);
+		}
+
+		// --- List view ---
+
+		function toggleView() {
+			if (viewMode === 'canvas') {
+				viewMode = 'list';
+				noLoop();
+				document.querySelector('canvas').style.display = 'none';
+				document.getElementById('list-view').classList.add('active');
+				document.getElementById('coords-display').style.display = 'none';
+				buildListView();
+			} else {
+				viewMode = 'canvas';
+				document.getElementById('list-view').classList.remove('active');
+				document.getElementById('list-columns').innerHTML = '';
+				document.querySelector('canvas').style.display = 'block';
+				document.getElementById('coords-display').style.display = '';
+				loop();
+			}
+		}
+
+		function buildListView() {
+			const container = document.getElementById('list-columns');
+			container.innerHTML = '';
+
+			const NUM_COLS = 5;
+			let columns = [];
+			for (let c = 0; c < NUM_COLS; c++) {
+				columns.push([]);
+			}
+
+			// Distribute items round-robin
+			for (let i = 0; i < items.length; i++) {
+				columns[i % NUM_COLS].push(items[i]);
+			}
+
+			const ANIM_DURATION = 50; // seconds per cycle
+
+			columns.forEach((colItems, colIdx) => {
+				let track = document.createElement('div');
+				track.className = 'column-track flex-1';
+
+				let inner = document.createElement('div');
+				inner.className = 'column-inner';
+				let direction = colIdx % 2 === 0 ? 'scroll-up' : 'scroll-down';
+				inner.style.animationName = direction;
+				inner.style.animationDuration = ANIM_DURATION + 's';
+
+				// Build items twice for seamless loop
+				for (let dup = 0; dup < 2; dup++) {
+					colItems.forEach(item => {
+						let el = document.createElement('div');
+						el.className = 'list-item';
+						// Use aspect ratio from the item's world dimensions
+						let aspect = item.h / item.w;
+						let lines = document.createElement('div');
+						lines.className = 'list-item-lines';
+						lines.style.aspectRatio = `1 / ${aspect}`;
+						let numLines = Math.floor(aspect * 12);
+						for (let l = 0; l < numLines; l++) {
+							let ln = document.createElement('div');
+							ln.className = 'list-item-line';
+							lines.appendChild(ln);
+						}
+						el.appendChild(lines);
+
+						// Title
+						let title = document.createElement('div');
+						title.textContent = item.title;
+						title.className = 'px-2 pb-2 text-[9px] tracking-wider text-[#666] uppercase';
+						title.style.fontFamily = "'IBM Plex Mono', monospace";
+						el.appendChild(title);
+
+						inner.appendChild(el);
+					});
+				}
+
+				track.appendChild(inner);
+				container.appendChild(track);
+			});
+		}
+
+		// Keyboard shortcuts
+		function keyPressed() {
+			if (key === 'v' || key === 'V') {
+				toggleView();
+				return;
+			}
+
+			if (viewMode !== 'canvas') return;
+
+			if (key === 'r' || key === 'R') {
+				// Reset view
+				offsetX = 0;
+				offsetY = 0;
+			}
+			if (key === 'g' || key === 'G') {
+				// Generate new items
+				generateItems(55);
+			}
+		}
+	</script>
+</body>
+
+</html>

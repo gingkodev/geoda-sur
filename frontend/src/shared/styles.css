@@ -1,0 +1,55 @@
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500&display=swap");
+@import "tailwindcss";
+
+@theme {
+  --color-cream: #f5f3ef;
+  --color-ink: #1a1a1a;
+  --color-muted: #666666;
+  --color-rule: #b4b4b4;
+  --color-highlight: #f5f0a0;
+  --color-card-article: #d4e8f5;
+  --color-card-rental: #c8e6c8;
+  --color-card-project: #f5d0d0;
+  --default-font-family: "IBM Plex Mono", monospace;
+  --default-mono-font-family: "IBM Plex Mono", monospace;
+}
+
+html,
+body {
+  background: var(--color-cream);
+  cursor: none;
+  color: var(--color-ink);
+}
+
+a {
+  cursor: none;
+}
+
+#custom-cursor {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 10000;
+  pointer-events: none;
+  will-change: transform;
+  mix-blend-mode: difference;
+}
+
+/* Nav link hover */
+.nav-link:hover {
+  background: var(--color-ink);
+  color: var(--color-cream) !important;
+}
+
+/* Mobile: restore default cursor */
+@media (max-width: 767px) {
+  html,
+  body,
+  a {
+    cursor: auto;
+  }
+
+  #custom-cursor {
+    display: none;
+  }
+}

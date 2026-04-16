@@ -1,0 +1,9 @@
+.env
+node_modules
+dist
+.claude
+public/uploads
+random-imgs
+notas-*.txt
+js/notas-*.txt
+database-scheme.txt
