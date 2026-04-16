@@ -342,11 +342,11 @@ function render(projects: Project[], services: Service[]) {
     }
   });
 
-  // Hash scroll on load
+  // Hash scroll on load — instant so user lands directly on the target
   if (location.hash) {
     const target = document.getElementById(location.hash.slice(1));
     if (target) {
-      target.scrollIntoView({ behavior: "smooth" });
+      target.scrollIntoView({ behavior: "instant" });
       setActiveProject(location.hash.slice(1), projects);
     }
   } else if (projects.length) {

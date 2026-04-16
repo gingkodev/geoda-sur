@@ -100,7 +100,10 @@ if (listNav) {
 	langDiv.querySelectorAll<HTMLButtonElement>(".lang-btn").forEach((btn) => {
 		btn.addEventListener("click", () => {
 			const lang = btn.dataset.switchLang as "es" | "en";
-			if (lang !== currentLang) switchLang(lang);
+			if (lang !== currentLang) {
+				sessionStorage.setItem("home_view_mode", viewMode);
+				switchLang(lang);
+			}
 		});
 	});
 }
@@ -117,11 +120,11 @@ Promise.all([
 	})
 	.catch((err) => {
 		console.error("Feed fetch failed:", err);
+		// Only reveal empty state on genuine failure
 		const emptyEl = document.getElementById("mobile-empty");
-		if (emptyEl) {
-			emptyEl.classList.remove("hidden");
-			document.getElementById("mobile-feed")?.classList.remove("hidden");
-		}
+		const feedEl = document.getElementById("mobile-feed");
+		if (emptyEl) emptyEl.classList.remove("hidden");
+		if (feedEl) feedEl.style.display = "block";
 	});
 
 function applyView() {
@@ -148,8 +151,11 @@ function renderMobile(data: FeedItem[]) {
 	const track = document.getElementById("mobile-track")!;
 	const textPanel = document.getElementById("mobile-text")!;
 
+	const feedEl = document.getElementById("mobile-feed")!;
+
 	if (!data.length) {
 		document.getElementById("mobile-empty")!.classList.remove("hidden");
+		feedEl.style.display = "block";
 		return;
 	}
 
@@ -177,7 +183,10 @@ function renderMobile(data: FeedItem[]) {
 	textPanel.querySelectorAll<HTMLButtonElement>(".lang-btn-mobile").forEach((btn) => {
 		btn.addEventListener("click", () => {
 			const lang = btn.dataset.switchLang as "es" | "en";
-			if (lang !== currentLang) switchLang(lang);
+			if (lang !== currentLang) {
+				sessionStorage.setItem("home_view_mode", viewMode);
+				switchLang(lang);
+			}
 		});
 	});
 
@@ -187,9 +196,11 @@ function renderMobile(data: FeedItem[]) {
 
 	function buildImages(offset: number) {
 		for (let i = 0; i < data.length; i++) {
-			const card = document.createElement("div");
-			card.className = "shrink-0";
-			card.style.width = widths[(i + offset) % widths.length];
+			const item = data[i % data.length];
+			const a = document.createElement("a");
+			a.href = item.link;
+			a.className = "shrink-0";
+			a.style.width = widths[(i + offset) % widths.length];
 
 			const src = shuffled.length > 0
 				? shuffled[(i + offset) % shuffled.length]
@@ -201,16 +212,19 @@ function renderMobile(data: FeedItem[]) {
 				img.alt = "";
 				img.className = "w-full h-auto block";
 				img.loading = "lazy";
-				card.appendChild(img);
+				a.appendChild(img);
 			}
 
-			track.appendChild(card);
+			track.appendChild(a);
 		}
 	}
 
 	// Duplicate for seamless loop
 	buildImages(0);
 	buildImages(3);
+
+	// Reveal feed now that content is ready
+	feedEl.style.display = "block";
 
 	// Graceful upward scroll
 	track.style.animationName = "mobile-scroll-up";
@@ -219,7 +233,6 @@ function renderMobile(data: FeedItem[]) {
 	track.style.animationIterationCount = "infinite";
 
 	// Pause on touch / hover
-	const feedEl = document.getElementById("mobile-feed")!;
 	feedEl.addEventListener("touchstart", () => { track.style.animationPlayState = "paused"; });
 	feedEl.addEventListener("touchend", () => { track.style.animationPlayState = "running"; });
 	feedEl.addEventListener("mousedown", () => { track.style.animationPlayState = "paused"; });
@@ -325,6 +338,13 @@ function buildCanvasItems(data: FeedItem[]) {
 			return ci;
 		});
 		separateItems();
+
+		// Restore view mode that was saved before a lang switch
+		const savedView = sessionStorage.getItem("home_view_mode");
+		sessionStorage.removeItem("home_view_mode");
+		if (savedView === "scroll") {
+			toggleView();
+		}
 	});
 }
 
