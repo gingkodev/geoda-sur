@@ -22,8 +22,7 @@ app.use("/uploads", express.static(path.join(__dirname, "..", "public", "uploads
 
 // Banco images (portfolio image bank) — immutable hashed filenames, cache aggressively
 app.use("/banco", express.static(path.join(__dirname, "..", "random-imgs", "banco-imagenes"), {
-  maxAge: "30d",
-  immutable: true,
+  maxAge: "6h",
 }));
 
 // Admin SPA
