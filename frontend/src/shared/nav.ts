@@ -64,6 +64,7 @@ export function initNav(container: HTMLElement | null) {
 
   container.innerHTML = html;
   bindLangButtons(container);
+  container.style.visibility = "";
 }
 
 /** Mobile hamburger nav */
@@ -112,4 +113,5 @@ export function initMobileNav(container: HTMLElement | null) {
   });
 
   bindLangButtons(container);
+  container.style.visibility = "";
 }
