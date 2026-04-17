@@ -65,6 +65,12 @@ export function initNav(container: HTMLElement | null) {
   container.innerHTML = html;
   bindLangButtons(container);
   container.style.visibility = "";
+  revealCompass();
+}
+
+function revealCompass() {
+  const compass = document.getElementById("compass");
+  if (compass) compass.style.visibility = "";
 }
 
 /** Mobile hamburger nav */
@@ -114,4 +120,5 @@ export function initMobileNav(container: HTMLElement | null) {
 
   bindLangButtons(container);
   container.style.visibility = "";
+  revealCompass();
 }
