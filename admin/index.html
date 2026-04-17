@@ -374,6 +374,10 @@ async function openModal(entity, id) {
     }
     if (f.type === 'file') {
       const isImage = f.accept.startsWith('image');
+      const maxMb = isImage ? 25 : 100;
+      const hint = isImage
+        ? `Máx. ${maxMb} MB · JPG, PNG, WebP, GIF`
+        : `Máx. ${maxMb} MB · MP3, WAV, OGG, FLAC, AAC, M4A`;
       const preview = isImage && val
         ? `<div class="upload-preview"><img src="${esc(val)}" alt="preview"></div>`
         : (val ? `<span class="text-[10px] text-neutral-500">${esc(val.split('/').pop())}</span>` : '');
@@ -382,7 +386,9 @@ async function openModal(entity, id) {
         <input type="hidden" data-key="${f.key}" value="${esc(val)}">
         <input type="file" data-upload-key="${f.key}" accept="${f.accept}"
           data-endpoint="${f.uploadEndpoint}"
+          data-max-mb="${maxMb}"
           class="w-full bg-transparent border border-ink px-3 py-2 text-xs tracking-wide file:mr-3 file:border-0 file:bg-ink file:text-paper file:px-2 file:py-1 file:text-[10px] file:uppercase file:tracking-wider file:cursor-pointer">
+        <div class="text-[10px] text-neutral-400 mt-1">${hint}</div>
         <div id="upload-status-${f.key}" class="upload-status text-neutral-500">${preview}</div>
       </div>`;
     }
@@ -458,10 +464,19 @@ async function openModal(entity, id) {
       const fileInput = e.target;
       const key = fileInput.dataset.uploadKey;
       const endpoint = fileInput.dataset.endpoint;
+      const maxMb = parseInt(fileInput.dataset.maxMb, 10);
       const file = fileInput.files[0];
       if (!file) return;
 
       const statusEl = document.getElementById('upload-status-' + key);
+
+      if (maxMb && file.size > maxMb * 1024 * 1024) {
+        const actualMb = (file.size / 1024 / 1024).toFixed(1);
+        statusEl.innerHTML = `<span class="text-red-600">Archivo demasiado grande (${actualMb} MB). Máximo: ${maxMb} MB</span>`;
+        fileInput.value = '';
+        return;
+      }
+
       statusEl.innerHTML = '<span class="text-neutral-400">Subiendo...</span>';
 
       const formData = new FormData();
@@ -473,7 +488,14 @@ async function openModal(entity, id) {
           headers: { 'Authorization': `Bearer ${token}` },
           body: formData,
         });
-        if (!res.ok) throw new Error('Upload failed');
+        if (!res.ok) {
+          let msg = 'Error al subir';
+          try {
+            const body = await res.json();
+            if (body.error) msg = body.error;
+          } catch {}
+          throw new Error(msg);
+        }
         const result = await res.json();
 
         const hiddenInput = fieldsEl.querySelector(`input[data-key="${key}"]`);
@@ -486,7 +508,7 @@ async function openModal(entity, id) {
           statusEl.innerHTML = `<span class="text-[10px] text-neutral-500">${esc(file.name)}</span>`;
         }
       } catch (err) {
-        statusEl.innerHTML = '<span class="text-red-600">Error al subir</span>';
+        statusEl.innerHTML = `<span class="text-red-600">${esc(err.message || 'Error al subir')}</span>`;
       }
     });
   });

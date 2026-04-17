@@ -29,23 +29,44 @@ const AUDIO_MIMES = [
 	"audio/x-m4a"
 ];
 
-export const uploadImage = multer({
+export const IMAGE_MAX_MB = 25;
+export const AUDIO_MAX_MB = 100;
+
+const uploadImageMw = multer({
 	storage: multer.memoryStorage(),
-	limits: { fileSize: 10 * 1024 * 1024 },
+	limits: { fileSize: IMAGE_MAX_MB * 1024 * 1024 },
 	fileFilter: (_req, file, cb) => {
 		if (IMAGE_MIMES.includes(file.mimetype)) cb(null, true);
 		else cb(new Error("Only image files are allowed"));
 	},
 }).single("file");
 
-export const uploadAudio = multer({
+const uploadAudioMw = multer({
 	storage: multer.memoryStorage(),
-	limits: { fileSize: 50 * 1024 * 1024 },
+	limits: { fileSize: AUDIO_MAX_MB * 1024 * 1024 },
 	fileFilter: (_req, file, cb) => {
 		if (AUDIO_MIMES.includes(file.mimetype)) cb(null, true);
 		else cb(new Error("Only audio files are allowed"));
 	},
 }).single("file");
+
+function wrapUpload(mw: any, maxMb: number, kind: string) {
+	return (req: Request, res: Response, next: NextFunction) => {
+		mw(req, res, (err: any) => {
+			if (!err) return next();
+			if (err.code === "LIMIT_FILE_SIZE") {
+				return res.status(413).json({
+					error: `El ${kind} supera el tamaño máximo de ${maxMb} MB`,
+					maxSizeMB: maxMb,
+				});
+			}
+			return res.status(400).json({ error: err.message || "Upload failed" });
+		});
+	};
+}
+
+export const uploadImage = wrapUpload(uploadImageMw, IMAGE_MAX_MB, "imagen");
+export const uploadAudio = wrapUpload(uploadAudioMw, AUDIO_MAX_MB, "audio");
 
 export async function processImage(
 	req: Request,
@@ -59,15 +80,15 @@ export async function processImage(
 		const fullPath = path.join(IMAGES_DIR, filename);
 		const mobilePath = path.join(MOBILE_DIR, filename);
 
-		// full-size: max 1920px wide, WebP quality 80
+		// desktop: max 1280px wide, WebP quality 80
 		await sharp(req.file.buffer)
-			.resize({ width: 1920, withoutEnlargement: true })
+			.resize({ width: 1280, withoutEnlargement: true })
 			.webp({ quality: 80 })
 			.toFile(fullPath);
 
-		// mobile: max 800px wide, WebP quality 75
+		// mobile: max 640px wide, WebP quality 75
 		await sharp(req.file.buffer)
-			.resize({ width: 800, withoutEnlargement: true })
+			.resize({ width: 640, withoutEnlargement: true })
 			.webp({ quality: 75 })
 			.toFile(mobilePath);
 
