@@ -12,6 +12,9 @@ if (isMobile) {
   initNav(document.getElementById("nav"));
 }
 
+const mainEl = document.querySelector("main") as HTMLElement | null;
+if (mainEl) mainEl.style.visibility = "";
+
 // Translate static HTML elements
 const pageTitle = document.querySelector("h1");
 if (pageTitle) pageTitle.textContent = t("contact.title");
