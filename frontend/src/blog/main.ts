@@ -138,9 +138,9 @@ function truncate(str: string, max: number) {
 
 // --- Desktop canvas items ---
 const typeStyles: Record<string, { bgColor: string; w: number; h: number }> = {
-	post: { bgColor: "#d4e8f5", w: 380, h: 220 },
-	audio: { bgColor: "#f5d0d0", w: 350, h: 72 },
-	note: { bgColor: "#f5f0a0", w: 340, h: 140 },
+	post: { bgColor: "#f5faf3", w: 380, h: 220 },
+	audio: { bgColor: "#dab58d", w: 350, h: 72 },
+	note: { bgColor: "#d6d0c5", w: 340, h: 140 },
 };
 
 function buildBlogItems(entries: BlogEntry[]) {
