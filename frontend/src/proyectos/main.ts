@@ -5,11 +5,11 @@ import { getProjects, getServices, type Project, type Service } from "../shared/
 import { getAnalyser, ensureAudioContext } from "./audio-analyser";
 import { createBogeySketch } from "./sketch";
 import { t, currentLang, switchLang } from "../shared/i18n";
+import { POST, AUDIO, NOTE, HOVER_BG } from "../shared/colors";
 
 declare const p5: any;
 
-// Card colors from blog palette
-const CARD_COLORS = ["#d4e8f5", "#c8e6c8", "#f5d0d0", "#f5f0a0"];
+const CARD_COLORS = [POST, AUDIO, NOTE];
 
 initCursor();
 
@@ -67,7 +67,7 @@ function moveSketchTo(slug: string) {
 	const container = canvasContainers.get(slug);
 	if (!container) return;
 
-	const color = slugColors.get(slug) ?? "#d4e8f5";
+	const color = slugColors.get(slug) ?? POST;
 
 	if (sketchInstance) {
 		// Clear old bogeys and set new color
@@ -380,7 +380,7 @@ function setActiveProject(slug: string, projects: Project[]) {
 	document.querySelectorAll(".project-list-link").forEach((el) => {
 		const link = el as HTMLElement;
 		if (link.dataset.slug === slug) {
-			link.style.backgroundColor = "#f5f3ef";
+			link.style.backgroundColor = HOVER_BG;
 			link.style.color = "#1a1a1a";
 		} else {
 			link.style.backgroundColor = "";

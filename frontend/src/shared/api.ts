@@ -54,6 +54,11 @@ export interface Service {
 	date_created: string;
 }
 
+export interface ServiceDetail {
+	service: Service;
+	projects: Project[];
+}
+
 // --- Fetch wrappers ---
 
 function addLang(url: string): string {
@@ -94,6 +99,10 @@ export function getBlog(offset = 0, limit = 40): Promise<BlogResponse> {
 
 export function getServices(): Promise<Service[]> {
 	return get("/api/services");
+}
+
+export function getServiceBySlug(slug: string): Promise<ServiceDetail> {
+	return get(`/api/services/by-slug/${encodeURIComponent(slug)}`);
 }
 
 export async function postContact(data: {

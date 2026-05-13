@@ -59,6 +59,11 @@ for (const page of pages) {
   });
 }
 
+// Servicios detail pages — same HTML, slug parsed by client from location.pathname
+app.get("/servicios/:slug", (_req, res) => {
+  res.sendFile(path.join(clientDir, "servicios.html"));
+});
+
 // 404 fallback
 app.use((_req, res) => {
   res.status(404).json({ error: "Not found" });

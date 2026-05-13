@@ -4,7 +4,20 @@ import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
   root: "frontend",
-  plugins: [tailwindcss()],
+  plugins: [
+    tailwindcss(),
+    {
+      name: "servicios-slug-rewrite",
+      configureServer(server) {
+        server.middlewares.use((req, _res, next) => {
+          if (req.url && /^\/servicios\/[^/?#]+/.test(req.url)) {
+            req.url = "/servicios.html";
+          }
+          next();
+        });
+      },
+    },
+  ],
   build: {
     outDir: "../dist/client",
     emptyOutDir: true,

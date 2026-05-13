@@ -30,6 +30,38 @@ router.get("/", async (req, res) => {
   }
 });
 
+// GET /api/services/by-slug/:slug — service joined with its linked projects
+router.get("/by-slug/:slug", async (req, res) => {
+  try {
+    const lang = getLang(req);
+
+    const [services] = await pool.query<RowDataPacket[]>(
+      `SELECT * FROM services WHERE is_deleted = 0`
+    );
+    const service = services.find((s) => slugify(s.name) === req.params.slug);
+    if (!service) return res.status(404).json({ error: "Not found" });
+
+    const [projects] = await pool.query<RowDataPacket[]>(
+      `SELECT p.* FROM projects p
+       INNER JOIN projects_services ps ON ps.project_id = p.id
+       WHERE ps.service_id = ? AND p.is_deleted = 0
+       ORDER BY p.date_created DESC`,
+      [service.id]
+    );
+
+    resolveRow(service, lang, I18N_FIELDS);
+    resolveRows(projects, lang, ["name", "writeup"]);
+
+    const headers = cacheHeaders(lang);
+    for (const [k, v] of Object.entries(headers)) res.setHeader(k, v);
+
+    res.json({ service, projects });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch service" });
+  }
+});
+
 // GET /api/services/:id
 router.get("/:id", async (req, res) => {
   try {

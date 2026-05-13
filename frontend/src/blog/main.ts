@@ -3,6 +3,7 @@ import { initCursor } from "../shared/cursor";
 import { initNav, initMobileNav } from "../shared/nav";
 import { getBlog, type BlogEntry } from "../shared/api";
 import { t } from "../shared/i18n";
+import { POST, AUDIO, NOTE, HOVER_BG } from "../shared/colors";
 
 // p5.js globals
 declare const createCanvas: any;
@@ -112,9 +113,9 @@ function renderMobileBlog(entries: BlogEntry[]) {
 	}
 	for (const entry of entries) {
 		const card = document.createElement("div");
-		const bgMap: Record<string, string> = { post: "#d4e8f5", audio: "#f5d0d0", note: "#f5f0a0" };
+		const bgMap: Record<string, string> = { post: POST, audio: AUDIO, note: NOTE };
 		card.className = "p-3.5 text-[11px] leading-[15px] border border-transparent";
-		card.style.backgroundColor = bgMap[entry.type] ?? "#d4e8f5";
+		card.style.backgroundColor = bgMap[entry.type] ?? POST;
 		if (entry.slug) card.id = entry.slug;
 		card.innerHTML = `
       <div class="flex justify-between items-start mb-1">
@@ -138,9 +139,9 @@ function truncate(str: string, max: number) {
 
 // --- Desktop canvas items ---
 const typeStyles: Record<string, { bgColor: string; w: number; h: number }> = {
-	post: { bgColor: "#f5faf3", w: 380, h: 220 },
-	audio: { bgColor: "#dab58d", w: 350, h: 72 },
-	note: { bgColor: "#d6d0c5", w: 340, h: 140 },
+	post: { bgColor: POST, w: 380, h: 220 },
+	audio: { bgColor: AUDIO, w: 350, h: 72 },
+	note: { bgColor: NOTE, w: 340, h: 140 },
 };
 
 function buildBlogItems(entries: BlogEntry[]) {
@@ -268,12 +269,18 @@ function generateDoodles() {
 	];
 	const points = poissonDiskSampling(2400, 1800, 250);
 	for (const pt of points) {
+		const type = doodleTypes[Math.floor(Math.random() * doodleTypes.length)];
+		const isTriangle = type === "triangle-outline" || type === "triangle-filled";
+		const triangleRotations = [0, Math.PI / 2, -Math.PI / 2];
+		const rotation = isTriangle
+			? triangleRotations[Math.floor(Math.random() * triangleRotations.length)]
+			: Math.random() * Math.PI * 2;
 		doodles.push({
 			x: pt.x - 1200,
 			y: pt.y - 900,
-			type: doodleTypes[Math.floor(Math.random() * doodleTypes.length)],
+			type,
 			size: 9 + Math.random() * 9,
-			rotation: Math.random() * Math.PI * 2,
+			rotation,
 		});
 	}
 }
@@ -353,7 +360,7 @@ function renderCards() {
 
 		el.addEventListener("mouseenter", () => {
 			if (!el.classList.contains("blog-selected")) {
-				el.style.backgroundColor = "#f5f3ef";
+				el.style.backgroundColor = HOVER_BG;
 				el.style.border = "1px dashed rgba(26,26,26,0.6)";
 			}
 		});

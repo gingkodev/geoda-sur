@@ -30,6 +30,8 @@ declare const LEFT: any;
 declare const RIGHT: any;
 declare const CENTER: any;
 declare const BOTTOM: any;
+declare const TOP: any;
+declare const textWidth: any;
 declare const noLoop: any;
 declare const loop: any;
 declare const width: number;
@@ -110,7 +112,7 @@ if (listNav) {
 
 // Register service worker for banco image caching
 if ("serviceWorker" in navigator) {
-	navigator.serviceWorker.register("/sw.js").catch(() => {});
+	navigator.serviceWorker.register("/sw.js").catch(() => { });
 }
 
 // --- Geolocation: center map on user's position ---
@@ -120,7 +122,7 @@ if ("geolocation" in navigator) {
 			offsetX = pos.coords.longitude * PIXELS_PER_DEGREE;
 			offsetY = -pos.coords.latitude * PIXELS_PER_DEGREE;
 		},
-		() => {}, // denied or failed — stay at 0,0
+		() => { }, // denied or failed — stay at 0,0
 		{ timeout: 5000 }
 	);
 }
@@ -140,7 +142,7 @@ Promise.all([
 			caches.open("cardinal-banco-v1").then((cache) => {
 				for (const src of manifest) {
 					cache.match(src).then((hit) => {
-						if (!hit) fetch(src).catch(() => {});
+						if (!hit) fetch(src).catch(() => { });
 					});
 				}
 			});
@@ -199,8 +201,8 @@ function renderMobile(data: FeedItem[]) {
     </div>
     <nav class="text-right flex flex-col gap-1.5">
       ${getLinks().filter((l) => l.href !== "/").map((l) =>
-        `<a href="${l.href}" class="text-xs tracking-widest uppercase no-underline text-ink">${l.label}</a>`
-      ).join("\n      ")}
+		`<a href="${l.href}" class="text-xs tracking-widest uppercase no-underline text-ink">${l.label}</a>`
+	).join("\n      ")}
     </nav>
     <div class="text-right flex justify-end items-center gap-0 mt-2 text-[10px] tracking-wider uppercase">
       <button data-switch-lang="es" class="lang-btn-mobile min-w-[44px] min-h-[44px] flex items-center justify-center ${esClass}">ES</button>
@@ -313,6 +315,8 @@ function enterDesktopView() {
 window.addEventListener("resize", () => applyView());
 
 // --- Canvas items from API data ---
+const MAP_ITEM_COUNT = 35;
+
 function buildCanvasItems(data: FeedItem[]) {
 	// Shuffle and pick random images from banco
 	const shuffled = [...bancoImages].sort(() => Math.random() - 0.5);
@@ -320,8 +324,11 @@ function buildCanvasItems(data: FeedItem[]) {
 	// Max dimension: ~15% of viewport
 	const maxDim = 250;
 
+	const target = data.length > 0 ? MAP_ITEM_COUNT : 0;
+
 	// Pre-load images, then size items to match aspect ratio
-	const promises = data.map((item, i) => {
+	const promises = Array.from({ length: target }, (_, i) => {
+		const item = data[i % data.length];
 		const ci: CanvasItem = {
 			x: 0, y: 0,
 			w: maxDim, h: maxDim,
@@ -458,7 +465,7 @@ if (window.innerWidth >= 768) {
 		background("#f5f3ef");
 		if (!items.length) return;
 		drawItems();
-		if (hoveredItem !== null) drawCrosshairLines(items[hoveredItem]);
+		if (hoveredItem !== null) drawCrosshairLines(hoveredItem);
 		drawLatitudeRuler();
 		drawLongitudeRuler();
 		drawScaleBar();
@@ -561,13 +568,8 @@ function drawItems() {
 		push();
 		if (item.imgEl && item.imgEl.complete && item.imgEl.naturalWidth > 0) {
 			(window as any).drawingContext.drawImage(item.imgEl, screen.x, screen.y, w, h);
-			stroke(26);
-			strokeWeight(1);
-			noFill();
-			rect(screen.x, screen.y, w, h);
 		} else {
-			strokeWeight(1);
-			stroke(26);
+			noStroke();
 			fill(255);
 			rect(screen.x, screen.y, w, h);
 
@@ -584,7 +586,8 @@ function drawItems() {
 	document.body.style.cursor = hoveredItem !== null ? "pointer" : "";
 }
 
-function drawCrosshairLines(item: CanvasItem) {
+function drawCrosshairLines(idx: number) {
+	const item = items[idx];
 	const screen = worldToScreen(item.x, item.y);
 	const w = item.w * zoom;
 	const h = item.h * zoom;
@@ -602,11 +605,72 @@ function drawCrosshairLines(item: CanvasItem) {
 
 	push();
 	noStroke();
-	textAlign(LEFT);
+	textAlign(LEFT, TOP);
 	textSize(11);
 	fill(100);
-	text(fullLabel, screen.x + w + 14, centerY + 16);
+	const pos = placeLabel(idx, fullLabel);
+	text(fullLabel, pos.x, pos.y);
 	pop();
+}
+
+const LABEL_PAD = 14;
+const LABEL_HEIGHT = 13;
+
+function placeLabel(hoveredIdx: number, label: string): { x: number; y: number } {
+	const tw = textWidth(label);
+	const item = items[hoveredIdx];
+	const screen = worldToScreen(item.x, item.y);
+	const w = item.w * zoom;
+	const h = item.h * zoom;
+	let labelY = screen.y + h / 2 + 6;
+	labelY = Math.max(RULER_HEIGHT, Math.min(labelY, height - LABEL_HEIGHT));
+
+	const blockers: { l: number; r: number }[] = [];
+	for (let i = 0; i < items.length; i++) {
+		const other = items[i];
+		const os = worldToScreen(other.x, other.y);
+		const ow = other.w * zoom;
+		const oh = other.h * zoom;
+		if (labelY < os.y + oh && labelY + LABEL_HEIGHT > os.y) {
+			blockers.push({ l: os.x, r: os.x + ow });
+		}
+	}
+
+	const fitsAt = (x: number) =>
+		x >= RULER_WIDTH &&
+		x + tw <= width &&
+		!blockers.some((b) => x < b.r && x + tw > b.l);
+
+	const rightX = screen.x + w + LABEL_PAD;
+	if (fitsAt(rightX)) return { x: rightX, y: labelY };
+
+	const leftX = screen.x - LABEL_PAD - tw;
+	if (fitsAt(leftX)) return { x: leftX, y: labelY };
+
+	blockers.sort((a, b) => a.l - b.l);
+	const gaps: { l: number; r: number }[] = [];
+	let cursor = RULER_WIDTH;
+	for (const b of blockers) {
+		if (b.l > cursor) gaps.push({ l: cursor, r: b.l });
+		cursor = Math.max(cursor, b.r);
+	}
+	if (cursor < width) gaps.push({ l: cursor, r: width });
+
+	const cardCenter = screen.x + w / 2;
+	let bestX: number | null = null;
+	let bestDist = Infinity;
+	for (const g of gaps) {
+		if (g.r - g.l < tw) continue;
+		const x = Math.max(g.l, Math.min(g.r - tw, cardCenter - tw / 2));
+		const dist = Math.abs(x + tw / 2 - cardCenter);
+		if (dist < bestDist) {
+			bestDist = dist;
+			bestX = x;
+		}
+	}
+	if (bestX !== null) return { x: bestX, y: labelY };
+
+	return { x: Math.max(RULER_WIDTH, Math.min(rightX, width - tw)), y: labelY };
 }
 
 function drawLatitudeRuler() {
@@ -775,7 +839,7 @@ function buildListView() {
 			for (const item of colItems) {
 				const a = document.createElement("a");
 				a.href = item.link;
-				a.className = "shrink-0 block";
+				a.className = "shrink-0 block relative group";
 
 				if (item.imgEl && item.imgEl.src) {
 					const img = document.createElement("img");
@@ -785,7 +849,7 @@ function buildListView() {
 					img.loading = "lazy";
 					a.appendChild(img);
 				} else {
-					a.className = "border border-ink bg-white shrink-0 block";
+					a.className = "border border-ink bg-white shrink-0 block relative group";
 					const aspect = item.h / item.w;
 					const lines = document.createElement("div");
 					lines.className = "w-full flex flex-col gap-1 p-2.5";
@@ -798,6 +862,17 @@ function buildListView() {
 					}
 					a.appendChild(lines);
 				}
+
+				const overlay = document.createElement("div");
+				overlay.className = "absolute inset-0 flex items-end justify-start px-3 py-3 opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none";
+				const titleEl = document.createElement("div");
+				titleEl.textContent = item.title.toUpperCase();
+				titleEl.className = "w-full text-xl leading-[1.05] font-medium uppercase tracking-tight";
+				titleEl.style.color = "#f5f3ef";
+				titleEl.style.textAlign = "justify";
+				(titleEl.style as any).textAlignLast = "justify";
+				overlay.appendChild(titleEl);
+				a.appendChild(overlay);
 
 				inner.appendChild(a);
 			}
