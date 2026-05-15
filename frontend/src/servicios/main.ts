@@ -204,6 +204,10 @@ interface BackdropShape {
 }
 
 let backdropShapes: BackdropShape[] = [];
+let hugeCircleSpin = 0;
+const hugeCircleSpinSpeed = 0.0015;
+let encloseCircleSpin = 0;
+const encloseCircleSpinSpeed = -0.0011;
 
 function sizeForType(type: ShapeType): number {
 	switch (type) {
@@ -447,8 +451,10 @@ function initServiciosBackdrop() {
 		pop();
 
 		// Giant enclosing dashed circle — wraps most of the viewport
+		encloseCircleSpin += encloseCircleSpinSpeed;
 		push();
 		translate(cx, cy);
+		rotate(encloseCircleSpin);
 		stroke(26, 26, 26, 70);
 		strokeWeight(1.5);
 		noFill();
@@ -457,6 +463,22 @@ function initServiciosBackdrop() {
 		const dash = Math.max(10, encloseD * 0.012);
 		drawingContext.setLineDash([dash, dash * 1.3]);
 		ellipse(0, 0, encloseD, encloseD);
+		drawingContext.restore();
+		pop();
+
+		// Huge dashed circle — radius reaches close to the right-side nav
+		hugeCircleSpin += hugeCircleSpinSpeed;
+		push();
+		translate(cx, cy);
+		rotate(hugeCircleSpin);
+		stroke(26, 26, 26, 55);
+		strokeWeight(1.5);
+		noFill();
+		drawingContext.save();
+		const hugeD = windowWidth - 80;
+		const hugeDash = Math.max(14, hugeD * 0.013);
+		drawingContext.setLineDash([hugeDash, hugeDash * 1.5]);
+		ellipse(0, 0, hugeD, hugeD);
 		drawingContext.restore();
 		pop();
 
