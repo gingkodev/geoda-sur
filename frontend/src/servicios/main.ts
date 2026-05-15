@@ -96,26 +96,36 @@ function renderDetail(slug: string) {
 	const pageBg = getRandomHex(codes);
 	// Guardrail against unreadable text on random backgrounds: dark bg → light text, light bg → dark text.
 	const textColor = isDark(pageBg) ? "#f5f3ef" : "#1a1a1a";
-	document.body.style.backgroundColor = pageBg;
-	document.body.style.color = textColor;
 
 	mainEl.innerHTML = `
 		<div class="max-w-5xl">
-			<a href="/servicios" class="inline-flex items-center gap-2 text-xs md:text-sm tracking-widest uppercase no-underline mb-10 opacity-60 hover:opacity-100 transition-opacity">
+			<a href="/servicios" class="inline-flex items-center gap-2 text-xs md:text-sm tracking-widest uppercase no-underline mb-10 opacity-60 hover:opacity-100 transition-opacity" style="color:${textColor}">
 				← ${t("nav.services")}
 			</a>
-			<h1 id="service-title" class="text-3xl md:text-5xl lg:text-7xl uppercase font-medium tracking-tight leading-[0.95] mb-6 md:mb-8"></h1>
-			<h2 id="service-description" class="text-base md:text-lg lg:text-2xl uppercase font-medium tracking-tight leading-tight max-w-3xl mb-14 md:mb-20"></h2>
+			<h1 id="service-title" class="text-3xl md:text-5xl lg:text-7xl uppercase font-medium tracking-tight leading-[0.95] mb-6 md:mb-8" style="color:${textColor}"></h1>
+			<h2 id="service-description" class="text-base md:text-lg lg:text-2xl uppercase font-medium tracking-tight leading-tight max-w-3xl mt-10 md:mt-12 mb-14 md:mb-20"></h2>
 			<div id="service-projects-label" class="text-xs md:text-sm tracking-widest uppercase mb-5 hidden opacity-55">${t("services.related")}</div>
 			<div id="service-projects" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5"></div>
 		</div>
 	`;
+
+	const applyCut = () => {
+		const titleEl = document.getElementById("service-title");
+		const descEl = document.getElementById("service-description");
+		if (!titleEl || !descEl) return;
+		const titleBottom = titleEl.getBoundingClientRect().bottom + window.scrollY;
+		const descTop = descEl.getBoundingClientRect().top + window.scrollY;
+		const cutY = (titleBottom + descTop) / 2;
+		document.body.style.background = `linear-gradient(to bottom, ${pageBg} ${cutY}px, #f5f3ef ${cutY}px)`;
+	};
 
 	getServiceBySlug(slug)
 		.then(({ service, projects }) => {
 			document.getElementById("service-title")!.textContent = service.name.toUpperCase();
 			renderProjectGrid(service, projects, pageBg);
 			mainEl.style.display = "";
+			requestAnimationFrame(applyCut);
+			window.addEventListener("resize", applyCut);
 		})
 		.catch((err) => {
 			console.error("Service detail fetch failed:", err);
@@ -210,11 +220,14 @@ function generateBackdropShapes() {
 	backdropShapes = [];
 	const vw = window.innerWidth;
 	const vh = window.innerHeight;
+	const mobile = vw < 768;
 	// Orbit extends past viewport edges so shapes drift in from outside
 	const maxR = Math.hypot(vw, vh) * 0.52;
 
 	// ---- Dots: clustered like constellations ----
-	const clusterCount = 7 + Math.floor(Math.random() * 4); // 7–10 clusters
+	const clusterCount = mobile
+		? 2 + Math.floor(Math.random() * 2)    // 2–3 on mobile
+		: 4 + Math.floor(Math.random() * 3);   // 4–6 on desktop
 	const clusters: { orbitR: number; orbitAngle: number; orbitSpeed: number }[] = [];
 	for (let i = 0; i < clusterCount; i++) {
 		clusters.push({
@@ -225,7 +238,7 @@ function generateBackdropShapes() {
 		});
 	}
 
-	const totalDots = 160;
+	const totalDots = mobile ? 50 : 100;
 	for (let i = 0; i < totalDots; i++) {
 		const wanderer = Math.random() < 0.12;
 		let orbitR: number;
@@ -270,7 +283,7 @@ function generateBackdropShapes() {
 		"dashed-line", "dashed-line", "dashed-line", "dashed-line",
 		"dashed-line", "dashed-line", "dashed-line",
 	];
-	const nonDotCount = 48;
+	const nonDotCount = mobile ? 24 : 48;
 
 	for (let i = 0; i < nonDotCount; i++) {
 		const type = nonDotMix[i % nonDotMix.length];
@@ -417,6 +430,36 @@ function initServiciosBackdrop() {
 		clear();
 		const cx = windowWidth / 2;
 		const cy = windowHeight / 2;
+
+		// Outer framing dashed circle — larger than the viewport diagonal,
+		// only corner arcs are visible, giving a subtle border-frame effect.
+		push();
+		translate(cx, cy);
+		stroke(26, 26, 26, 50);
+		strokeWeight(1.5);
+		noFill();
+		drawingContext.save();
+		const frameD = Math.hypot(windowWidth, windowHeight) * 1.15;
+		const frameDash = Math.max(14, frameD * 0.012);
+		drawingContext.setLineDash([frameDash, frameDash * 1.3]);
+		ellipse(0, 0, frameD, frameD);
+		drawingContext.restore();
+		pop();
+
+		// Giant enclosing dashed circle — wraps most of the viewport
+		push();
+		translate(cx, cy);
+		stroke(26, 26, 26, 70);
+		strokeWeight(1.5);
+		noFill();
+		drawingContext.save();
+		const encloseD = Math.min(windowWidth, windowHeight) * 1.05;
+		const dash = Math.max(10, encloseD * 0.012);
+		drawingContext.setLineDash([dash, dash * 1.3]);
+		ellipse(0, 0, encloseD, encloseD);
+		drawingContext.restore();
+		pop();
+
 		for (const s of backdropShapes) {
 			s.orbitAngle += s.orbitSpeed;
 			if (s.spinSpeed !== 0) s.spin += s.spinSpeed;
@@ -426,10 +469,11 @@ function initServiciosBackdrop() {
 
 	(window as any).windowResized = function() {
 		resizeCanvas(windowWidth, windowHeight);
+		generateBackdropShapes();
 	};
 }
 
-// Kick off backdrop only on index, desktop
-if (!detailSlug && !isMobile) {
+// Kick off backdrop on index (mobile + desktop)
+if (!detailSlug) {
 	initServiciosBackdrop();
 }
