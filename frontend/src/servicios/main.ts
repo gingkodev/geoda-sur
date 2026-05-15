@@ -1,8 +1,9 @@
 import "../shared/styles.css";
 import { initCursor } from "../shared/cursor";
 import { initNav, initMobileNav } from "../shared/nav";
-import { getServices, getServiceBySlug, type Project } from "../shared/api";
-import { POST, AUDIO, NOTE } from "../shared/colors";
+import { getServices, getServiceBySlug, type Project, type Service } from "../shared/api";
+import { POST, AUDIO, NOTE, codes, getRandomHex, isDark } from "../shared/colors";
+import { t } from "../shared/i18n";
 
 // p5.js globals (index backdrop)
 declare const createCanvas: any;
@@ -92,13 +93,20 @@ function renderIndex() {
 }
 
 function renderDetail(slug: string) {
+	const pageBg = getRandomHex(codes);
+	// Guardrail against unreadable text on random backgrounds: dark bg → light text, light bg → dark text.
+	const textColor = isDark(pageBg) ? "#f5f3ef" : "#1a1a1a";
+	document.body.style.backgroundColor = pageBg;
+	document.body.style.color = textColor;
+
 	mainEl.innerHTML = `
 		<div class="max-w-5xl">
-			<a href="/servicios" class="inline-flex items-center gap-2 text-[10px] tracking-widest uppercase text-muted no-underline mb-12 hover:text-ink transition-colors">
-				← Servicios
+			<a href="/servicios" class="inline-flex items-center gap-2 text-xs md:text-sm tracking-widest uppercase no-underline mb-10 opacity-60 hover:opacity-100 transition-opacity">
+				← ${t("nav.services")}
 			</a>
-			<h1 id="service-title" class="text-3xl md:text-5xl lg:text-7xl uppercase font-medium tracking-tight leading-[0.95] mb-16 md:mb-24"></h1>
-			<div id="service-projects-label" class="text-[10px] tracking-widest uppercase text-muted mb-4 hidden">Proyectos relacionados</div>
+			<h1 id="service-title" class="text-3xl md:text-5xl lg:text-7xl uppercase font-medium tracking-tight leading-[0.95] mb-6 md:mb-8"></h1>
+			<h2 id="service-description" class="text-base md:text-lg lg:text-2xl uppercase font-medium tracking-tight leading-tight max-w-3xl mb-14 md:mb-20"></h2>
+			<div id="service-projects-label" class="text-xs md:text-sm tracking-widest uppercase mb-5 hidden opacity-55">${t("services.related")}</div>
 			<div id="service-projects" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5"></div>
 		</div>
 	`;
@@ -106,24 +114,28 @@ function renderDetail(slug: string) {
 	getServiceBySlug(slug)
 		.then(({ service, projects }) => {
 			document.getElementById("service-title")!.textContent = service.name.toUpperCase();
-			renderProjectGrid(projects);
+			renderProjectGrid(service, projects, pageBg);
 			mainEl.style.display = "";
 		})
 		.catch((err) => {
 			console.error("Service detail fetch failed:", err);
 			mainEl.innerHTML = `
 				<div class="max-w-3xl">
-					<a href="/servicios" class="inline-flex items-center gap-2 text-[10px] tracking-widest uppercase text-muted no-underline mb-8 hover:text-ink transition-colors">← Servicios</a>
-					<p class="text-sm text-muted">Servicio no encontrado.</p>
+					<a href="/servicios" class="inline-flex items-center gap-2 text-xs md:text-sm tracking-widest uppercase no-underline mb-8 opacity-60 hover:opacity-100 transition-opacity">← ${t("nav.services")}</a>
+					<p class="text-sm opacity-60">Servicio no encontrado.</p>
 				</div>
 			`;
 			mainEl.style.display = "";
 		});
 }
 
-function renderProjectGrid(projects: Project[]) {
+function renderProjectGrid(service: Service, projects: Project[], pageBg?: string) {
 	const grid = document.getElementById("service-projects")!;
+	const description = document.getElementById("service-description")!;
 	const label = document.getElementById("service-projects-label")!;
+
+	description.innerHTML = service.description;
+
 	if (!projects.length) {
 		grid.innerHTML = `<p class="text-xs text-muted col-span-full">Aún no hay proyectos vinculados a este servicio.</p>`;
 		return;
@@ -131,12 +143,18 @@ function renderProjectGrid(projects: Project[]) {
 
 	label.classList.remove("hidden");
 
-	const palette = [POST, AUDIO, NOTE];
+	const allColors = [POST, AUDIO, NOTE];
+	const pageBgNorm = pageBg?.toLowerCase();
+	const palette = pageBgNorm
+		? allColors.filter(c => c.toLowerCase() !== pageBgNorm)
+		: allColors;
+	const activePalette = palette.length > 0 ? palette : allColors;
+
 	const shuffled = [...projects].sort(() => Math.random() - 0.5);
 
 	for (let i = 0; i < shuffled.length; i++) {
 		const p = shuffled[i];
-		const bg = palette[i % palette.length];
+		const bg = activePalette[i % activePalette.length];
 		const pslug = slugify(p.name);
 		const card = document.createElement("a");
 		card.href = `/proyectos#${pslug}`;
@@ -180,11 +198,11 @@ let backdropShapes: BackdropShape[] = [];
 function sizeForType(type: ShapeType): number {
 	switch (type) {
 		case "large-dashed-circle": return 400 + Math.random() * 500;   // 400–900  (big frames)
-		case "mid-circle":          return 30  + Math.random() * 150;   // 30–180   (outlined, no fill)
-		case "dot":                 return 3   + Math.random() * 12;    // 3–15     (hairline dot)
-		case "arc":                 return 60  + Math.random() * 190;   // 60–250
-		case "dashed-line":         return 0;                           // unused; lineLen drives it
-		case "rectangle":           return 0;                           // unused; rectW/H drive it
+		case "mid-circle": return 30 + Math.random() * 150;   // 30–180   (outlined, no fill)
+		case "dot": return 3 + Math.random() * 12;    // 3–15     (hairline dot)
+		case "arc": return 60 + Math.random() * 190;   // 60–250
+		case "dashed-line": return 0;                           // unused; lineLen drives it
+		case "rectangle": return 0;                           // unused; rectW/H drive it
 	}
 }
 
@@ -195,39 +213,79 @@ function generateBackdropShapes() {
 	// Orbit extends past viewport edges so shapes drift in from outside
 	const maxR = Math.hypot(vw, vh) * 0.52;
 
-	// Heavy weighting toward tiny dots — matches the star-chart reference density
-	// ~50% dots, ~15% mid-circles, ~10% large dashed frames, ~10% arcs, ~8% rects, ~7% lines
-	const typeMix: ShapeType[] = [
-		"dot", "dot", "dot", "dot", "dot",  // 5 dots
-		"dot", "dot", "dot", "dot", "dot",  // 10 dots
-		"mid-circle", "mid-circle",          // 2 mid
-		"large-dashed-circle",               // 1 large
-		"arc",                               // 1 arc
-		"rectangle",                         // 1 rect
-		"dashed-line", "dashed-line",        // 2 lines
-		"dashed-line", "dashed-line",        // 4 lines
-		"dot", "dot",                        // +2 more dots
+	// ---- Dots: clustered like constellations ----
+	const clusterCount = 7 + Math.floor(Math.random() * 4); // 7–10 clusters
+	const clusters: { orbitR: number; orbitAngle: number; orbitSpeed: number }[] = [];
+	for (let i = 0; i < clusterCount; i++) {
+		clusters.push({
+			orbitR: 120 + Math.random() * (maxR - 120),
+			orbitAngle: Math.random() * Math.PI * 2,
+			// Shared speed keeps each cluster moving as a unit
+			orbitSpeed: (0.0004 + Math.random() * 0.0016) * (Math.random() < 0.5 ? 1 : -1),
+		});
+	}
+
+	const totalDots = 160;
+	for (let i = 0; i < totalDots; i++) {
+		const wanderer = Math.random() < 0.12;
+		let orbitR: number;
+		let orbitAngle: number;
+		let orbitSpeed: number;
+		if (wanderer) {
+			orbitR = Math.random() * maxR;
+			orbitAngle = Math.random() * Math.PI * 2;
+			orbitSpeed = (0.0004 + Math.random() * 0.0016) * (Math.random() < 0.5 ? 1 : -1);
+		} else {
+			const c = clusters[Math.floor(Math.random() * clusters.length)];
+			// Gaussian-ish jitter (sum of two uniforms) for tighter cores, soft edges
+			const radialJitter = ((Math.random() + Math.random()) - 1) * 55;
+			const tangentialPx = ((Math.random() + Math.random()) - 1) * 90;
+			orbitR = Math.max(40, c.orbitR + radialJitter);
+			orbitAngle = c.orbitAngle + tangentialPx / Math.max(c.orbitR, 100);
+			orbitSpeed = c.orbitSpeed;
+		}
+		backdropShapes.push({
+			type: "dot",
+			size: sizeForType("dot"),
+			orbitR,
+			orbitAngle,
+			orbitSpeed,
+			spin: 0,
+			spinSpeed: 0,
+			arcStart: 0,
+			arcSpan: 0,
+			rectW: 0,
+			rectH: 0,
+			lineLen: 0,
+			lineAngle: 0,
+		});
+	}
+
+	// ---- Non-dot shapes: scattered, no clustering ----
+	const nonDotMix: ShapeType[] = [
+		"mid-circle", "mid-circle", "mid-circle",
+		"large-dashed-circle",
+		"arc", "arc",
+		"rectangle", "rectangle", "rectangle", "rectangle",
+		"dashed-line", "dashed-line", "dashed-line", "dashed-line",
+		"dashed-line", "dashed-line", "dashed-line",
 	];
-	// Expand to ~100 shapes by repeating the mix
-	const count = 100;
+	const nonDotCount = 48;
 
-	for (let i = 0; i < count; i++) {
-		const type = typeMix[i % typeMix.length] as ShapeType;
+	for (let i = 0; i < nonDotCount; i++) {
+		const type = nonDotMix[i % nonDotMix.length];
 		const baseSize = sizeForType(type);
-		const isCircle = type === "large-dashed-circle" || type === "mid-circle" || type === "dot";
+		const isCircle = type === "large-dashed-circle" || type === "mid-circle";
 
-		// Fully random orbit radii — avoids visible banding
 		const orbitR = Math.random() * maxR;
 		const orbitSpeed = (0.0004 + Math.random() * 0.0016) * (Math.random() < 0.5 ? 1 : -1);
 
-		// Rectangles: slender tick-mark proportions, 10–40px long side
-		const longSide  = 10 + Math.random() * 30;
+		const longSide = 10 + Math.random() * 30;
 		const shortSide = longSide * (0.15 + Math.random() * 0.35);
 
-		// Lines: mostly short, occasional long one
-		const lineLen = Math.random() < 0.12
-			? 200 + Math.random() * 200   // rare long: 200–400
-			: 30  + Math.random() * 150;  // common short: 30–180
+		const lineLen = Math.random() < 0.72
+			? 220 + Math.random() * 280   // long: 220–500
+			: 30 + Math.random() * 150;   // short: 30–180
 
 		backdropShapes.push({
 			type,
@@ -261,8 +319,10 @@ function generateBackdropShapes() {
 
 function drawBackdropShape(s: BackdropShape, cx: number, cy: number) {
 	const INK = 26;
-	const x = cx + Math.cos(s.orbitAngle) * s.orbitR;
-	const y = cy + Math.sin(s.orbitAngle) * s.orbitR;
+	// Large dashed circles are concentric — pinned to the page center
+	const isConcentric = s.type === "large-dashed-circle";
+	const x = isConcentric ? cx : cx + Math.cos(s.orbitAngle) * s.orbitR;
+	const y = isConcentric ? cy : cy + Math.sin(s.orbitAngle) * s.orbitR;
 
 	push();
 	translate(x, y);
@@ -312,14 +372,16 @@ function drawBackdropShape(s: BackdropShape, cx: number, cy: number) {
 			break;
 		}
 		case "dashed-line": {
-			rotate(s.lineAngle);
+			// Inner end stops short of the page center, leaving a small gap
+			rotate(s.orbitAngle);
 			stroke(INK, INK, INK, 60);
 			strokeWeight(1);
 			noFill();
 			drawingContext.save();
 			const d = Math.max(4, s.lineLen * 0.05);
 			drawingContext.setLineDash([d, d * 1.3]);
-			line(-s.lineLen / 2, 0, s.lineLen / 2, 0);
+			const centerGap = 18;
+			line(-s.orbitR + centerGap, 0, -s.orbitR + s.lineLen, 0);
 			drawingContext.restore();
 			break;
 		}
@@ -340,7 +402,7 @@ function initServiciosBackdrop() {
 	// Only runs on desktop index — guard is upstream in renderIndex()
 	generateBackdropShapes();
 
-	(window as any).setup = function () {
+	(window as any).setup = function() {
 		const backdropEl = document.getElementById("services-backdrop");
 		const c = createCanvas(windowWidth, windowHeight);
 		c.style("position", "fixed");
@@ -351,7 +413,7 @@ function initServiciosBackdrop() {
 		if (backdropEl) backdropEl.appendChild(c.elt);
 	};
 
-	(window as any).draw = function () {
+	(window as any).draw = function() {
 		clear();
 		const cx = windowWidth / 2;
 		const cy = windowHeight / 2;
@@ -362,7 +424,7 @@ function initServiciosBackdrop() {
 		}
 	};
 
-	(window as any).windowResized = function () {
+	(window as any).windowResized = function() {
 		resizeCanvas(windowWidth, windowHeight);
 	};
 }

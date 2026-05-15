@@ -26,6 +26,7 @@ const strings: Record<string, Record<Lang, string>> = {
   // Services
   "services.title": { es: "Servicios", en: "Services" },
   "services.empty": { es: "No hay servicios aún", en: "No services yet" },
+  "services.related": { es: "Proyectos relacionados", en: "Related projects" },
 
   // Projects
   "projects.empty": { es: "No hay proyectos aún", en: "No projects yet" },
