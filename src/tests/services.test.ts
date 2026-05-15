@@ -86,6 +86,14 @@ describe("Services Routes", () => {
         .send({ name: "X", description: "X" });
       expect(res.status).toBe(404);
     });
+
+    it("rejects unauthenticated update", async () => {
+      const service = await seedService();
+      const res = await request(app)
+        .put(`/api/services/${service.id}`)
+        .send({ name: "Hacked", description: "Hacked" });
+      expect(res.status).toBe(401);
+    });
   });
 
   describe("DELETE /api/services/:id", () => {
@@ -110,6 +118,81 @@ describe("Services Routes", () => {
         .delete(`/api/services/${service.id}`)
         .set("Authorization", `Bearer ${token}`);
       expect(res.status).toBe(404);
+    });
+
+    it("rejects unauthenticated delete", async () => {
+      const service = await seedService();
+      const res = await request(app).delete(`/api/services/${service.id}`);
+      expect(res.status).toBe(401);
+    });
+  });
+
+  describe("i18n (_en fields)", () => {
+    it("POST persists name_en and description_en, exposed via ?lang=en", async () => {
+      const create = await request(app)
+        .post("/api/services")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          name: "Mezcla",
+          name_en: "Mixing",
+          description: "Mezcla de audio",
+          description_en: "Audio mixing",
+        });
+      expect(create.status).toBe(201);
+
+      const en = await request(app).get(`/api/services/${create.body.id}?lang=en`);
+      expect(en.body.name).toBe("Mixing");
+      expect(en.body.description).toBe("Audio mixing");
+
+      const es = await request(app).get(`/api/services/${create.body.id}?lang=es`);
+      expect(es.body.name).toBe("Mezcla");
+      expect(es.body.description).toBe("Mezcla de audio");
+    });
+
+    it("PUT updates _en fields, visible via ?lang=en", async () => {
+      const service = await seedService("Original", "Desc");
+      await request(app)
+        .put(`/api/services/${service.id}`)
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          name: "Original",
+          description: "Desc",
+          name_en: "Updated EN",
+          description_en: "Updated EN desc",
+        });
+      const en = await request(app).get(`/api/services/${service.id}?lang=en`);
+      expect(en.body.name).toBe("Updated EN");
+      expect(en.body.description).toBe("Updated EN desc");
+    });
+
+    it("?lang=en falls back to Spanish when _en is null", async () => {
+      const service = await seedService("Solo ES", "Solo descripción");
+      const en = await request(app).get(`/api/services/${service.id}?lang=en`);
+      expect(en.body.name).toBe("Solo ES");
+      expect(en.body.description).toBe("Solo descripción");
+    });
+  });
+
+  describe("slug generation", () => {
+    it("POST generates slug from name (lowercased, hyphenated)", async () => {
+      const create = await request(app)
+        .post("/api/services")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ name: "Mezcla de Audio", description: "x" });
+      const bySlug = await request(app).get("/api/services/by-slug/mezcla-de-audio");
+      expect(bySlug.status).toBe(200);
+      expect(bySlug.body.service.id).toBe(create.body.id);
+    });
+
+    it("PUT regenerates slug when name changes", async () => {
+      const service = await seedService("Old Name", "x");
+      await request(app)
+        .put(`/api/services/${service.id}`)
+        .set("Authorization", `Bearer ${token}`)
+        .send({ name: "Brand New Name", description: "x" });
+      const bySlug = await request(app).get("/api/services/by-slug/brand-new-name");
+      expect(bySlug.status).toBe(200);
+      expect(bySlug.body.service.id).toBe(service.id);
     });
   });
 });

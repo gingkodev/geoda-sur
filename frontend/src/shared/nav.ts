@@ -17,14 +17,18 @@ export function getLinks(): NavLink[] {
   ];
 }
 
+const LANG_BTN_BASE = "lang-btn px-1.5 py-0.5";
+const LANG_ACTIVE = "bg-ink text-cream";
+const LANG_INACTIVE = "text-ink";
+
 function langToggleHTML(): string {
-  const esClass = currentLang === "es" ? "bg-ink text-cream" : "text-ink";
-  const enClass = currentLang === "en" ? "bg-ink text-cream" : "text-ink";
+  const esClass = currentLang === "es" ? LANG_ACTIVE : LANG_INACTIVE;
+  const enClass = currentLang === "en" ? LANG_ACTIVE : LANG_INACTIVE;
   return `
-    <div class="flex items-center gap-0 mt-6 text-[10px] tracking-wider uppercase">
-      <button data-switch-lang="es" class="lang-btn min-w-[44px] min-h-[44px] flex items-center justify-center px-1.5 ${esClass}">ES</button>
-      <span class="text-muted px-0.5">/</span>
-      <button data-switch-lang="en" class="lang-btn min-w-[44px] min-h-[44px] flex items-center justify-center px-1.5 ${enClass}">EN</button>
+    <div class="flex gap-0 mt-6 text-[10px] tracking-wider uppercase">
+      <button data-switch-lang="es" class="${LANG_BTN_BASE} ${esClass}">ES</button>
+      <span class="text-ink/50 px-0.5">/</span>
+      <button data-switch-lang="en" class="${LANG_BTN_BASE} ${enClass}">EN</button>
     </div>
   `;
 }
@@ -84,17 +88,17 @@ export function initMobileNav(container: HTMLElement | null) {
   const current = window.location.pathname.replace(/\/+$/, "") || "/";
   const links = getLinks();
 
-  const esClass = currentLang === "es" ? "bg-ink text-cream" : "text-ink";
-  const enClass = currentLang === "en" ? "bg-ink text-cream" : "text-ink";
+  const esClass = currentLang === "es" ? LANG_ACTIVE : LANG_INACTIVE;
+  const enClass = currentLang === "en" ? LANG_ACTIVE : LANG_INACTIVE;
 
   container.innerHTML = `
     <div class="flex items-center justify-between px-4 py-3">
       <a href="/" class="text-sm tracking-widest uppercase font-medium no-underline text-ink">Cardinal Sur</a>
       <div class="flex items-center gap-3">
-        <div class="flex items-center gap-0 text-[10px] tracking-wider uppercase">
-          <button data-switch-lang="es" class="lang-btn min-w-[44px] min-h-[44px] flex items-center justify-center ${esClass}">ES</button>
-          <span class="text-muted px-0.5">/</span>
-          <button data-switch-lang="en" class="lang-btn min-w-[44px] min-h-[44px] flex items-center justify-center ${enClass}">EN</button>
+        <div class="flex gap-0 text-[10px] tracking-wider uppercase">
+          <button data-switch-lang="es" class="${LANG_BTN_BASE} ${esClass}">ES</button>
+          <span class="text-ink/50 px-0.5">/</span>
+          <button data-switch-lang="en" class="${LANG_BTN_BASE} ${enClass}">EN</button>
         </div>
         <button id="hamburger" class="text-ink text-lg leading-none cursor-auto min-w-[44px] min-h-[44px] flex items-center justify-center">&#9776;</button>
       </div>

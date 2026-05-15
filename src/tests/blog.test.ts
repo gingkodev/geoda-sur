@@ -131,6 +131,14 @@ describe("Blog Routes", () => {
         .send({ title: "X", category: "X", type: "post" });
       expect(res.status).toBe(404);
     });
+
+    it("rejects unauthenticated update", async () => {
+      const entry = await seedBlogEntry();
+      const res = await request(app)
+        .put(`/api/blog/${entry.id}`)
+        .send({ title: "Hacked", category: "x", type: "post" });
+      expect(res.status).toBe(401);
+    });
   });
 
   describe("DELETE /api/blog/:id", () => {
@@ -141,6 +149,101 @@ describe("Blog Routes", () => {
         .set("Authorization", `Bearer ${token}`);
       expect(res.status).toBe(200);
       expect(res.body.deleted).toBe(true);
+    });
+
+    it("rejects unauthenticated delete", async () => {
+      const entry = await seedBlogEntry();
+      const res = await request(app).delete(`/api/blog/${entry.id}`);
+      expect(res.status).toBe(401);
+    });
+  });
+
+  describe("i18n (_en fields)", () => {
+    it("POST persists title_en + writeup_en, ?lang=en returns English", async () => {
+      const create = await request(app)
+        .post("/api/blog")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          title: "Título",
+          title_en: "Title",
+          category: "tech",
+          type: "post",
+          writeup: "Contenido",
+          writeup_en: "Content",
+        });
+      expect(create.status).toBe(201);
+
+      const en = await request(app).get(`/api/blog/${create.body.id}?lang=en`);
+      expect(en.body.title).toBe("Title");
+      expect(en.body.writeup).toBe("Content");
+
+      const es = await request(app).get(`/api/blog/${create.body.id}?lang=es`);
+      expect(es.body.title).toBe("Título");
+      expect(es.body.writeup).toBe("Contenido");
+    });
+
+    it("PUT updates _en fields, visible via ?lang=en", async () => {
+      const entry = await seedBlogEntry("Original", "cat", "post", "Original writeup");
+      await request(app)
+        .put(`/api/blog/${entry.id}`)
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          title: "Original",
+          category: "cat",
+          type: "post",
+          writeup: "Original writeup",
+          title_en: "Updated EN",
+          writeup_en: "Updated EN writeup",
+        });
+      const en = await request(app).get(`/api/blog/${entry.id}?lang=en`);
+      expect(en.body.title).toBe("Updated EN");
+      expect(en.body.writeup).toBe("Updated EN writeup");
+    });
+
+    it("?lang=en falls back to Spanish when _en is null", async () => {
+      const entry = await seedBlogEntry("Solo ES", "cat", "post", "Solo writeup");
+      const en = await request(app).get(`/api/blog/${entry.id}?lang=en`);
+      expect(en.body.title).toBe("Solo ES");
+      expect(en.body.writeup).toBe("Solo writeup");
+    });
+  });
+
+  describe("slug generation", () => {
+    it("POST writes a slug derived from title", async () => {
+      const create = await request(app)
+        .post("/api/blog")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          title: "Hello World Post",
+          category: "tech",
+          type: "post",
+          writeup: "x",
+        });
+      const { default: pool } = await import("../db.js");
+      const [rows] = await pool.query<any[]>(
+        "SELECT slug FROM blog WHERE id = ?",
+        [create.body.id]
+      );
+      expect(rows[0].slug).toBe("hello-world-post");
+    });
+
+    it("PUT regenerates slug when title changes", async () => {
+      const entry = await seedBlogEntry("Old Title");
+      await request(app)
+        .put(`/api/blog/${entry.id}`)
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          title: "Brand New Title",
+          category: "cat",
+          type: "post",
+          writeup: "x",
+        });
+      const { default: pool } = await import("../db.js");
+      const [rows] = await pool.query<any[]>(
+        "SELECT slug FROM blog WHERE id = ?",
+        [entry.id]
+      );
+      expect(rows[0].slug).toBe("brand-new-title");
     });
   });
 });

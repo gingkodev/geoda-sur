@@ -49,7 +49,7 @@ describe("Upload Routes", () => {
           filename: "test.txt",
           contentType: "text/plain",
         });
-      expect(res.status).toBe(500);
+      expect(res.status).toBe(400);
     });
 
     it("rejects unauthenticated upload", async () => {
@@ -88,7 +88,7 @@ describe("Upload Routes", () => {
           filename: "test.txt",
           contentType: "text/plain",
         });
-      expect(res.status).toBe(500);
+      expect(res.status).toBe(400);
     });
 
     it("rejects unauthenticated upload", async () => {

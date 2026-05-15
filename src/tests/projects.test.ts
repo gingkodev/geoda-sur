@@ -130,6 +130,14 @@ describe("Projects Routes", () => {
         .send({ name: "X", writeup: "X", img_url: "/x.webp" });
       expect(res.status).toBe(404);
     });
+
+    it("rejects unauthenticated update", async () => {
+      const project = await seedProject();
+      const res = await request(app)
+        .put(`/api/projects/${project.id}`)
+        .send({ name: "Hacked", writeup: "Hacked", img_url: "/x.webp" });
+      expect(res.status).toBe(401);
+    });
   });
 
   describe("DELETE /api/projects/:id", () => {
@@ -155,6 +163,12 @@ describe("Projects Routes", () => {
         .set("Authorization", `Bearer ${token}`);
       expect(res.status).toBe(404);
     });
+
+    it("rejects unauthenticated delete", async () => {
+      const project = await seedProject();
+      const res = await request(app).delete(`/api/projects/${project.id}`);
+      expect(res.status).toBe(401);
+    });
   });
 
   describe("POST /api/projects/:id/services", () => {
@@ -179,6 +193,15 @@ describe("Projects Routes", () => {
         .send({ service_id: service.id });
       expect(res.status).toBe(409);
     });
+
+    it("rejects unauthenticated link", async () => {
+      const project = await seedProject();
+      const service = await seedService();
+      const res = await request(app)
+        .post(`/api/projects/${project.id}/services`)
+        .send({ service_id: service.id });
+      expect(res.status).toBe(401);
+    });
   });
 
   describe("DELETE /api/projects/:id/services/:serviceId", () => {
@@ -198,6 +221,93 @@ describe("Projects Routes", () => {
         .delete("/api/projects/9999/services/9999")
         .set("Authorization", `Bearer ${token}`);
       expect(res.status).toBe(404);
+    });
+
+    it("rejects unauthenticated unlink", async () => {
+      const project = await seedProject();
+      const service = await seedService();
+      await linkProjectService(project.id, service.id);
+      const res = await request(app).delete(
+        `/api/projects/${project.id}/services/${service.id}`
+      );
+      expect(res.status).toBe(401);
+    });
+  });
+
+  describe("i18n (_en fields)", () => {
+    it("POST persists name_en + writeup_en, ?lang=en returns English", async () => {
+      const create = await request(app)
+        .post("/api/projects")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          name: "Proyecto",
+          name_en: "Project",
+          writeup: "Descripción",
+          writeup_en: "Writeup",
+          img_url: "/img.webp",
+        });
+      expect(create.status).toBe(201);
+
+      const en = await request(app).get(`/api/projects/${create.body.id}?lang=en`);
+      expect(en.body.name).toBe("Project");
+      expect(en.body.writeup).toBe("Writeup");
+
+      const es = await request(app).get(`/api/projects/${create.body.id}?lang=es`);
+      expect(es.body.name).toBe("Proyecto");
+      expect(es.body.writeup).toBe("Descripción");
+    });
+
+    it("PUT updates _en fields, visible via ?lang=en", async () => {
+      const project = await seedProject("Original", "Original writeup");
+      await request(app)
+        .put(`/api/projects/${project.id}`)
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          name: "Original",
+          writeup: "Original writeup",
+          name_en: "Updated EN",
+          writeup_en: "Updated EN writeup",
+          img_url: "/img.webp",
+        });
+      const en = await request(app).get(`/api/projects/${project.id}?lang=en`);
+      expect(en.body.name).toBe("Updated EN");
+      expect(en.body.writeup).toBe("Updated EN writeup");
+    });
+
+    it("?lang=en falls back to Spanish when _en is null", async () => {
+      const project = await seedProject("Solo ES", "Solo writeup");
+      const en = await request(app).get(`/api/projects/${project.id}?lang=en`);
+      expect(en.body.name).toBe("Solo ES");
+      expect(en.body.writeup).toBe("Solo writeup");
+    });
+  });
+
+  describe("slug generation", () => {
+    it("POST writes a slug derived from name", async () => {
+      const create = await request(app)
+        .post("/api/projects")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ name: "Sala Brut", writeup: "x", img_url: "/img.webp" });
+      const { default: pool } = await import("../db.js");
+      const [rows] = await pool.query<any[]>(
+        "SELECT slug FROM projects WHERE id = ?",
+        [create.body.id]
+      );
+      expect(rows[0].slug).toBe("sala-brut");
+    });
+
+    it("PUT regenerates slug when name changes", async () => {
+      const project = await seedProject("Old Name", "x");
+      await request(app)
+        .put(`/api/projects/${project.id}`)
+        .set("Authorization", `Bearer ${token}`)
+        .send({ name: "Brand New Name", writeup: "x", img_url: "/img.webp" });
+      const { default: pool } = await import("../db.js");
+      const [rows] = await pool.query<any[]>(
+        "SELECT slug FROM projects WHERE id = ?",
+        [project.id]
+      );
+      expect(rows[0].slug).toBe("brand-new-name");
     });
   });
 });
