@@ -28,72 +28,83 @@ const MAX_TIME_SLICES = 60;
 const SAMPLE_INTERVAL = 12;   // sample every N frames
 const SPAWN_THRESHOLD = 40;   // min amplitude to draw
 
-type BogeyDrawFn = (p: any, x: number, y: number, s: number) => void;
+type RGB = [number, number, number];
+type BogeyDrawFn = (p: any, x: number, y: number, s: number, color: RGB, alpha: number) => void;
 
-function drawBogeyDiamond(p: any, x: number, y: number, s: number) {
-  p.beginShape();
-  p.vertex(x, y - s);
-  p.vertex(x + s * 0.7, y);
-  p.vertex(x, y + s * 0.8);
-  p.vertex(x - s * 0.7, y);
-  p.endShape(p.CLOSE);
-}
+// CRT / radar-vector workshop — each shape fits a 2s monospace box.
+// Each shape sets its own fill/stroke explicitly; the next call always
+// overwrites both, so push/pop is only needed where matrix state is touched.
 
-function drawBogeyCross(p: any, x: number, y: number, s: number) {
-  p.rectMode(p.CENTER);
-  const t = s * 0.3;
-  p.rect(x, y, s * 1.8, t);
-  p.rect(x + s * 0.1, y, t, s * 1.6);
-}
-
-function drawBogeyTriangle(p: any, x: number, y: number, s: number) {
-  p.beginShape();
-  p.vertex(x - s * 0.1, y - s);
-  p.vertex(x + s * 0.8, y + s * 0.7);
-  p.vertex(x - s * 0.7, y + s * 0.8);
-  p.endShape(p.CLOSE);
-}
-
-function drawBogeyChevron(p: any, x: number, y: number, s: number) {
-  const t = s * 0.25;
-  p.beginShape();
-  p.vertex(x - s, y + s * 0.5);
-  p.vertex(x, y - s * 0.5);
-  p.vertex(x + s, y + s * 0.5);
-  p.vertex(x + s * 0.7, y + s * 0.5 + t);
-  p.vertex(x, y - s * 0.5 + t * 1.5);
-  p.vertex(x - s * 0.7, y + s * 0.5 + t);
-  p.endShape(p.CLOSE);
-}
-
-function drawBogeyBrokenRing(p: any, x: number, y: number, s: number) {
+function drawBogeyDiamond(p: any, x: number, y: number, s: number, color: RGB, alpha: number) {
+  const [cr, cg, cb] = color;
   p.noFill();
-  p.strokeWeight(s * 0.25);
-  p.arc(x, y, s * 1.6, s * 1.6, 0.4, p.TWO_PI - 0.3);
-  p.strokeWeight(1);
+  p.stroke(cr, cg, cb, alpha);
+  p.strokeWeight(Math.max(1.5, s * 0.2));
+  p.quad(x, y - s, x + s, y, x, y + s, x - s, y);
 }
 
-function drawBogeyDash(p: any, x: number, y: number, s: number) {
-  const len = s * 1.6;
-  const dashLen = len / 3;
-  const gap = dashLen * 0.5;
-  p.strokeWeight(s * 0.25);
-  p.strokeCap(p.SQUARE);
-  const startX = x - len * 0.5;
-  for (let d = 0; d < 3; d++) {
-    const ax = startX + d * (dashLen + gap);
-    p.line(ax, y, ax + dashLen, y);
-  }
-  p.strokeWeight(1);
+function drawBogeyCross(p: any, x: number, y: number, s: number, color: RGB, alpha: number) {
+  const [cr, cg, cb] = color;
+  p.noStroke();
+  p.fill(cr, cg, cb, alpha);
+  const t = s * 0.3;
+  const len = s * 2;
+  p.rect(x - s, y - t / 2, len, t);
+  p.rect(x - t / 2, y - s, t, len);
+}
+
+function drawBogeySquare(p: any, x: number, y: number, s: number, color: RGB, alpha: number) {
+  const [cr, cg, cb] = color;
+  p.noStroke();
+  p.fill(cr, cg, cb, alpha);
+  p.rect(x - s, y - s, s * 2, s * 2);
+}
+
+function drawBogeyChevron(p: any, x: number, y: number, s: number, color: RGB, alpha: number) {
+  const [cr, cg, cb] = color;
+  p.noStroke();
+  p.fill(cr, cg, cb, alpha);
+  const t = s * 0.4;
+  const top = y - s * 0.2;
+  p.beginShape();
+  p.vertex(x - s, top);
+  p.vertex(x, y - s);
+  p.vertex(x + s, top);
+  p.vertex(x + s, top + t);
+  p.vertex(x, y - s + t);
+  p.vertex(x - s, top + t);
+  p.endShape(p.CLOSE);
+}
+
+function drawBogeyRing(p: any, x: number, y: number, s: number, color: RGB, alpha: number) {
+  const [cr, cg, cb] = color;
+  p.noFill();
+  p.stroke(cr, cg, cb, alpha);
+  p.strokeWeight(Math.max(1.5, s * 0.2));
+  p.circle(x, y, s * 1.8);
+}
+
+function drawBogeyTee(p: any, x: number, y: number, s: number, color: RGB, alpha: number) {
+  const [cr, cg, cb] = color;
+  const t = s * 0.3;
+  const len = s * 2;
+  p.push();
+  p.translate(x, y);
+  p.rotate(p.QUARTER_PI);
+  p.noStroke();
+  p.fill(cr, cg, cb, alpha);
+  p.rect(-len / 2, -s, len, t);
+  p.rect(-t / 2, -t * 2.4, t, t * 2);
+  p.pop();
 }
 
 const BOGEY_DRAW_FUNCS: BogeyDrawFn[] = [
   drawBogeyDiamond,
   drawBogeyCross,
-  drawBogeyTriangle,
+  drawBogeySquare,
   drawBogeyChevron,
-  drawBogeyBrokenRing,
-  drawBogeyDash,
+  drawBogeyRing,
+  drawBogeyTee,
 ];
 
 function hexToRgb(hex: string): [number, number, number] {
@@ -193,8 +204,6 @@ export function createBogeySketch(analyser: AnalyserNode, containerEl?: HTMLElem
     }
 
     function drawBogeys() {
-      const [cr, cg, cb] = baseColor;
-
       for (let col = 0; col < bogeyData.length; col++) {
         const slice = bogeyData[col];
         if (!slice) continue;
@@ -206,16 +215,7 @@ export function createBogeySketch(analyser: AnalyserNode, containerEl?: HTMLElem
           const sz = p.map(band.amp, SPAWN_THRESHOLD, 255, 4, 28);
           const alpha = p.map(band.amp, SPAWN_THRESHOLD, 255, 60, 220);
 
-          p.push();
-          if (band.shapeIndex === 4 || band.shapeIndex === 5) {
-            p.noFill();
-            p.stroke(cr, cg, cb, alpha);
-          } else {
-            p.fill(cr, cg, cb, alpha);
-            p.noStroke();
-          }
-          BOGEY_DRAW_FUNCS[band.shapeIndex](p, baseX, band.jitterY, sz);
-          p.pop();
+          BOGEY_DRAW_FUNCS[band.shapeIndex](p, baseX, band.jitterY, sz, baseColor, alpha);
         }
       }
     }

@@ -70,8 +70,10 @@ function moveSketchTo(slug: string) {
 	const color = slugColors.get(slug) ?? POST;
 
 	if (sketchInstance) {
-		// Clear old bogeys and set new color
+		// Clear old bogeys, wipe stale canvas pixels so they don't flash
+		// into the new hero for a frame, and set the new color
 		sketchInstance.clearBogeys?.();
+		sketchInstance.clear?.();
 		sketchInstance.setBogeyColor?.(color);
 
 		// Move existing canvas into the new container
