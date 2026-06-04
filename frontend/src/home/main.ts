@@ -42,6 +42,8 @@ declare const key: string;
 let viewMode: "map" | "scroll" = "map";
 let offsetX = 0;
 let offsetY = 0;
+let targetOffsetX = 0;
+let targetOffsetY = 0;
 let zoom = 1;
 let isDragging = false;
 let lastMouseX = 0;
@@ -59,6 +61,10 @@ interface CanvasItem {
 	type: string;
 	link: string;
 	imgEl?: HTMLImageElement;
+	driftPhase: number;
+	driftSpeed: number;
+	driftX: number;
+	driftY: number;
 }
 
 let items: CanvasItem[] = [];
@@ -113,18 +119,6 @@ if (listNav) {
 // Register service worker for banco image caching
 if ("serviceWorker" in navigator) {
 	navigator.serviceWorker.register("/sw.js").catch(() => { });
-}
-
-// --- Geolocation: center map on user's position ---
-if ("geolocation" in navigator) {
-	navigator.geolocation.getCurrentPosition(
-		(pos) => {
-			offsetX = pos.coords.longitude * PIXELS_PER_DEGREE;
-			offsetY = -pos.coords.latitude * PIXELS_PER_DEGREE;
-		},
-		() => { }, // denied or failed — stay at 0,0
-		{ timeout: 5000 }
-	);
 }
 
 // --- Fetch data + image manifest, then build ---
@@ -336,6 +330,10 @@ function buildCanvasItems(data: FeedItem[]) {
 			title: item.title,
 			type: item.type,
 			link: item.link,
+			driftPhase: Math.random() * Math.PI * 2,
+			driftSpeed: 0.25 + Math.random() * 0.2, // rad/s — full wander cycle every ~15-25s
+			driftX: 0,
+			driftY: 0,
 		};
 
 		if (shuffled.length > 0) {
@@ -383,7 +381,13 @@ function buildCanvasItems(data: FeedItem[]) {
 		// Restore view mode that was saved before a lang switch
 		const savedView = sessionStorage.getItem("home_view_mode");
 		sessionStorage.removeItem("home_view_mode");
-		if (savedView === "scroll") {
+
+		// Map only shows on the first home load of the session;
+		// afterwards land directly on the scroll view
+		const mapSeen = sessionStorage.getItem("home_map_seen");
+		sessionStorage.setItem("home_map_seen", "1");
+
+		if (savedView === "scroll" || (savedView !== "map" && mapSeen)) {
 			toggleView();
 		}
 	});
@@ -421,6 +425,22 @@ function separateItems() {
 		}
 		if (!moved) break;
 	}
+}
+
+// --- Idle drift: each item wanders on a tiny Lissajous orbit ---
+const DRIFT_AMP = 15; // world px — clearly visible wander
+
+function updateDrift() {
+	const t = performance.now() / 1000;
+	for (const item of items) {
+		const a = t * item.driftSpeed + item.driftPhase;
+		item.driftX = Math.sin(a) * DRIFT_AMP;
+		item.driftY = Math.cos(a * 1.3 + item.driftPhase) * DRIFT_AMP;
+	}
+}
+
+function itemScreen(item: CanvasItem) {
+	return worldToScreen(item.x + item.driftX, item.y + item.driftY);
 }
 
 // --- p5.js world/screen helpers ---
@@ -464,6 +484,9 @@ if (window.innerWidth >= 768) {
 	(window as any).draw = function() {
 		background("#f5f3ef");
 		if (!items.length) return;
+		offsetX += (targetOffsetX - offsetX) * 0.12;
+		offsetY += (targetOffsetY - offsetY) * 0.12;
+		updateDrift();
 		drawItems();
 		if (hoveredItem !== null) drawCrosshairLines(hoveredItem);
 		drawLatitudeRuler();
@@ -500,38 +523,48 @@ if (window.innerWidth >= 768) {
 
 	(window as any).mouseDragged = function() {
 		if (viewMode !== "map" || !isDragging) return;
-		offsetX -= (mouseX - lastMouseX) / zoom;
-		offsetY -= (mouseY - lastMouseY) / zoom;
+		targetOffsetX -= (mouseX - lastMouseX) / zoom;
+		targetOffsetY -= (mouseY - lastMouseY) / zoom;
+		offsetX = targetOffsetX;
+		offsetY = targetOffsetY;
 		lastMouseX = mouseX;
 		lastMouseY = mouseY;
 	};
 
 	(window as any).mouseWheel = function(e: any) {
 		if (viewMode !== "map") return;
-		const zoomFactor = 0.05;
-		const minZoom = 0.3;
-		const maxZoom = 3;
 
-		// Zoom toward mouse position
-		const wx = (mouseX - width / 2) / zoom + offsetX;
-		const wy = (mouseY - height / 2) / zoom + offsetY;
+		// Ctrl/Cmd + scroll (incl. trackpad pinch) → zoom toward cursor
+		if (e.ctrlKey || e.metaKey) {
+			const zoomFactor = 0.05;
+			const minZoom = 0.3;
+			const maxZoom = 3;
 
-		const prevZoom = zoom;
-		zoom *= e.delta > 0 ? (1 - zoomFactor) : (1 + zoomFactor);
-		zoom = Math.max(minZoom, Math.min(maxZoom, zoom));
+			const wx = (mouseX - width / 2) / zoom + offsetX;
+			const wy = (mouseY - height / 2) / zoom + offsetY;
 
-		// Adjust offset so the point under the cursor stays put
-		offsetX = wx - (mouseX - width / 2) / zoom;
-		offsetY = wy - (mouseY - height / 2) / zoom;
+			zoom *= e.delta > 0 ? (1 - zoomFactor) : (1 + zoomFactor);
+			zoom = Math.max(minZoom, Math.min(maxZoom, zoom));
 
+			// Adjust offset so the point under the cursor stays put
+			offsetX = wx - (mouseX - width / 2) / zoom;
+			offsetY = wy - (mouseY - height / 2) / zoom;
+			targetOffsetX = offsetX;
+			targetOffsetY = offsetY;
+			return false;
+		}
+
+		// Plain scroll → pan (lerped in draw)
+		targetOffsetX += e.deltaX / zoom;
+		targetOffsetY += e.deltaY / zoom;
 		return false;
 	};
 
 	(window as any).keyPressed = function() {
 		if (viewMode !== "map") return;
 		if (key === "r" || key === "R") {
-			offsetX = 0;
-			offsetY = 0;
+			targetOffsetX = 0;
+			targetOffsetY = 0;
 			zoom = 1;
 		}
 	};
@@ -551,7 +584,7 @@ function drawItems() {
 	hoveredItem = null;
 	for (let i = 0; i < items.length; i++) {
 		const item = items[i];
-		const screen = worldToScreen(item.x, item.y);
+		const screen = itemScreen(item);
 		const w = item.w * zoom;
 		const h = item.h * zoom;
 
@@ -588,7 +621,7 @@ function drawItems() {
 
 function drawCrosshairLines(idx: number) {
 	const item = items[idx];
-	const screen = worldToScreen(item.x, item.y);
+	const screen = itemScreen(item);
 	const w = item.w * zoom;
 	const h = item.h * zoom;
 	const centerX = screen.x + w / 2;
@@ -619,7 +652,7 @@ const LABEL_HEIGHT = 13;
 function placeLabel(hoveredIdx: number, label: string): { x: number; y: number } {
 	const tw = textWidth(label);
 	const item = items[hoveredIdx];
-	const screen = worldToScreen(item.x, item.y);
+	const screen = itemScreen(item);
 	const w = item.w * zoom;
 	const h = item.h * zoom;
 	let labelY = screen.y + h / 2 + 6;
@@ -628,7 +661,7 @@ function placeLabel(hoveredIdx: number, label: string): { x: number; y: number }
 	const blockers: { l: number; r: number }[] = [];
 	for (let i = 0; i < items.length; i++) {
 		const other = items[i];
-		const os = worldToScreen(other.x, other.y);
+		const os = itemScreen(other);
 		const ow = other.w * zoom;
 		const oh = other.h * zoom;
 		if (labelY < os.y + oh && labelY + LABEL_HEIGHT > os.y) {
