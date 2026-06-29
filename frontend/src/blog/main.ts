@@ -3,7 +3,12 @@ import { initCursor } from "../shared/cursor";
 import { initNav, initMobileNav } from "../shared/nav";
 import { getBlog, type BlogEntry } from "../shared/api";
 import { t } from "../shared/i18n";
-import { POST, AUDIO, NOTE, HOVER_BG } from "../shared/colors";
+import { HOVER_BG } from "../shared/colors";
+
+// Monochrome cards: black box, light type; hover inverts to a light ghost card.
+const CARD_BG = "#000000";
+const CARD_TEXT = "#F9F9F9";
+const HOVER_TEXT = "#000000";
 
 // p5.js globals
 declare const createCanvas: any;
@@ -113,9 +118,9 @@ function renderMobileBlog(entries: BlogEntry[]) {
 	}
 	for (const entry of entries) {
 		const card = document.createElement("div");
-		const bgMap: Record<string, string> = { post: POST, audio: AUDIO, note: NOTE };
 		card.className = "p-3.5 text-[11px] leading-[15px] border border-transparent";
-		card.style.backgroundColor = bgMap[entry.type] ?? POST;
+		card.style.backgroundColor = CARD_BG;
+		card.style.color = CARD_TEXT;
 		if (entry.slug) card.id = entry.slug;
 		card.innerHTML = `
       <div class="flex justify-between items-start mb-1">
@@ -139,9 +144,9 @@ function truncate(str: string, max: number) {
 
 // --- Desktop canvas items ---
 const typeStyles: Record<string, { bgColor: string; w: number; h: number }> = {
-	post: { bgColor: POST, w: 380, h: 220 },
-	audio: { bgColor: AUDIO, w: 350, h: 72 },
-	note: { bgColor: NOTE, w: 340, h: 140 },
+	post: { bgColor: CARD_BG, w: 380, h: 220 },
+	audio: { bgColor: CARD_BG, w: 350, h: 72 },
+	note: { bgColor: CARD_BG, w: 340, h: 140 },
 };
 
 function buildBlogItems(entries: BlogEntry[]) {
@@ -349,7 +354,8 @@ function renderCards() {
       left: ${item.x}px; top: ${item.y}px;
       width: ${Math.round(item.w)}px; height: ${Math.round(item.h)}px;
       background-color: ${item.bgColor};
-      transition: border 0.15s, background-color 0.15s;
+      color: ${CARD_TEXT};
+      transition: border 0.15s, background-color 0.15s, color 0.15s;
     `;
 		el.innerHTML = buildCardHTML(item, false);
 
@@ -361,12 +367,14 @@ function renderCards() {
 		el.addEventListener("mouseenter", () => {
 			if (!el.classList.contains("blog-selected")) {
 				el.style.backgroundColor = HOVER_BG;
-				el.style.border = "1px dashed rgba(26,26,26,0.6)";
+				el.style.color = HOVER_TEXT;
+				el.style.border = "1px dashed rgba(0,0,0,0.6)";
 			}
 		});
 		el.addEventListener("mouseleave", () => {
 			if (!el.classList.contains("blog-selected")) {
 				el.style.backgroundColor = item.bgColor;
+				el.style.color = CARD_TEXT;
 				el.style.border = "1px solid transparent";
 			}
 		});
@@ -389,8 +397,8 @@ function buildCardHTML(item: BlogCanvasItem, expanded: boolean): string {
         </div>
       </div>
       <div class="absolute bottom-3.5 left-3.5 right-3.5 flex items-center gap-2.5">
-        <div class="w-0 h-0 border-l-[10px] border-l-ink border-y-[6px] border-y-transparent shrink-0 cursor-pointer play-btn"></div>
-        <div class="flex-1 h-px bg-ink"></div>
+        <div class="w-0 h-0 border-l-[10px] border-l-current border-y-[6px] border-y-transparent shrink-0 cursor-pointer play-btn"></div>
+        <div class="flex-1 h-px bg-current"></div>
       </div>
     `;
 	}
@@ -434,6 +442,7 @@ function selectItem(index: number) {
 		if (idx === index) {
 			el.classList.add("blog-selected");
 			el.style.backgroundColor = item.bgColor;
+			el.style.color = CARD_TEXT;
 			el.style.border = "1px solid transparent";
 			el.style.opacity = "1";
 			el.style.pointerEvents = "auto";
@@ -464,16 +473,16 @@ function selectItem(index: number) {
 				// Update button visual
 				const playing = audioElements[item.id] && !audioElements[item.id].paused;
 				if (playing) {
-					(btn as HTMLElement).className = "w-[10px] h-[12px] border-l-[3px] border-r-[3px] border-ink shrink-0 cursor-pointer play-btn";
+					(btn as HTMLElement).className = "w-[10px] h-[12px] border-l-[3px] border-r-[3px] border-current shrink-0 cursor-pointer play-btn";
 				} else {
-					(btn as HTMLElement).className = "w-0 h-0 border-l-[10px] border-l-ink border-y-[6px] border-y-transparent shrink-0 cursor-pointer play-btn";
+					(btn as HTMLElement).className = "w-0 h-0 border-l-[10px] border-l-current border-y-[6px] border-y-transparent shrink-0 cursor-pointer play-btn";
 				}
 			});
 		}
 		playAudio(item.id, item.audio_url);
 		// Show pause icon since we just started playing
 		if (btn) {
-			(btn as HTMLElement).className = "w-[10px] h-[12px] border-l-[3px] border-r-[3px] border-ink shrink-0 cursor-pointer play-btn";
+			(btn as HTMLElement).className = "w-[10px] h-[12px] border-l-[3px] border-r-[3px] border-current shrink-0 cursor-pointer play-btn";
 		}
 	}
 }
@@ -494,6 +503,7 @@ function deselectItem() {
 		el.style.userSelect = "";
 		el.style.border = "1px solid transparent";
 		el.style.backgroundColor = item.bgColor;
+		el.style.color = CARD_TEXT;
 		el.innerHTML = buildCardHTML(item, false);
 	}
 	selectedItem = null;

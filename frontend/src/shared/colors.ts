@@ -1,7 +1,7 @@
 export const POST = "#f7a0a1";
 export const AUDIO = "#dab58d";
 export const NOTE = "#d6d0c5";
-export const HOVER_BG = "#f5f3ef";
+export const HOVER_BG = "#F9F9F9";
 
 export const PALETTE = [POST, AUDIO, NOTE, HOVER_BG];
 

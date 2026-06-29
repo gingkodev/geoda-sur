@@ -2,7 +2,7 @@ import "../shared/styles.css";
 import { initCursor } from "../shared/cursor";
 import { initNav, initMobileNav } from "../shared/nav";
 import { getServices, getServiceBySlug, type Project, type Service } from "../shared/api";
-import { POST, AUDIO, NOTE, codes, getRandomHex, isDark } from "../shared/colors";
+import { codes, getRandomHex, isDark } from "../shared/colors";
 import { t } from "../shared/i18n";
 
 // p5.js globals (index backdrop)
@@ -98,7 +98,7 @@ function renderIndex() {
 function renderDetail(slug: string) {
 	const pageBg = getRandomHex(codes);
 	// Guardrail against unreadable text on random backgrounds: dark bg → light text, light bg → dark text.
-	const textColor = isDark(pageBg) ? "#f5f3ef" : "#1a1a1a";
+	const textColor = isDark(pageBg) ? "#F9F9F9" : "#000000";
 
 	mainEl.innerHTML = `
 		<div class="max-w-5xl">
@@ -108,7 +108,7 @@ function renderDetail(slug: string) {
 			<h1 id="service-title" class="text-3xl md:text-5xl lg:text-7xl uppercase font-medium tracking-tight leading-[0.95] mb-6 md:mb-8" style="color:${textColor}"></h1>
 			<h2 id="service-description" class="text-base md:text-lg lg:text-2xl uppercase font-medium tracking-tight leading-tight max-w-3xl mt-10 md:mt-12 mb-14 md:mb-20"></h2>
 			<div id="service-projects-label" class="text-xs md:text-sm tracking-widest uppercase mb-5 hidden opacity-55">${t("services.related")}</div>
-			<div id="service-projects" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5"></div>
+			<div id="service-projects" class="flex flex-col items-start gap-1"></div>
 		</div>
 	`;
 
@@ -119,13 +119,13 @@ function renderDetail(slug: string) {
 		const titleBottom = titleEl.getBoundingClientRect().bottom + window.scrollY;
 		const descTop = descEl.getBoundingClientRect().top + window.scrollY;
 		const cutY = (titleBottom + descTop) / 2;
-		document.body.style.background = `linear-gradient(to bottom, ${pageBg} ${cutY}px, #f5f3ef ${cutY}px)`;
+		document.body.style.background = `linear-gradient(to bottom, ${pageBg} ${cutY}px, #F9F9F9 ${cutY}px)`;
 	};
 
 	getServiceBySlug(slug)
 		.then(({ service, projects }) => {
 			document.getElementById("service-title")!.textContent = service.name.toUpperCase();
-			renderProjectGrid(service, projects, pageBg);
+			renderProjectGrid(service, projects);
 			mainEl.style.display = "";
 			requestAnimationFrame(applyCut);
 			window.addEventListener("resize", applyCut);
@@ -142,7 +142,7 @@ function renderDetail(slug: string) {
 		});
 }
 
-function renderProjectGrid(service: Service, projects: Project[], pageBg?: string) {
+function renderProjectGrid(service: Service, projects: Project[]) {
 	const grid = document.getElementById("service-projects")!;
 	const description = document.getElementById("service-description")!;
 	const label = document.getElementById("service-projects-label")!;
@@ -150,34 +150,20 @@ function renderProjectGrid(service: Service, projects: Project[], pageBg?: strin
 	description.innerHTML = service.description;
 
 	if (!projects.length) {
-		grid.innerHTML = `<p class="text-xs text-muted col-span-full">Aún no hay proyectos vinculados a este servicio.</p>`;
+		grid.innerHTML = `<p class="text-xs text-muted">Aún no hay proyectos vinculados a este servicio.</p>`;
 		return;
 	}
 
 	label.classList.remove("hidden");
 
-	const allColors = [POST, AUDIO, NOTE];
-	const pageBgNorm = pageBg?.toLowerCase();
-	const palette = pageBgNorm
-		? allColors.filter(c => c.toLowerCase() !== pageBgNorm)
-		: allColors;
-	const activePalette = palette.length > 0 ? palette : allColors;
-
-	const shuffled = [...projects].sort(() => Math.random() - 0.5);
-
-	for (let i = 0; i < shuffled.length; i++) {
-		const p = shuffled[i];
-		const bg = activePalette[i % activePalette.length];
+	// Just the project titles — no cards, no fill.
+	for (const p of projects) {
 		const pslug = slugify(p.name);
-		const card = document.createElement("a");
-		card.href = `/proyectos#${pslug}`;
-		card.className = "block p-5 text-[10px] leading-[14px] no-underline text-ink min-h-[180px] transition-opacity duration-150 hover:opacity-85";
-		card.style.backgroundColor = bg;
-		card.innerHTML = `
-			<div class="text-sm uppercase tracking-tight font-medium leading-tight mb-3">${p.name.toUpperCase()}</div>
-			${p.writeup ? `<div class="opacity-80">${truncate(p.writeup.toUpperCase(), 160)}</div>` : ""}
-		`;
-		grid.appendChild(card);
+		const link = document.createElement("a");
+		link.href = `/proyectos#${pslug}`;
+		link.className = "service-link inline-block px-1.5 py-0.5 no-underline text-ink hover:bg-ink hover:text-cream transition-colors duration-150 text-sm uppercase font-medium tracking-tight leading-tight";
+		link.textContent = p.name.toUpperCase();
+		grid.appendChild(link);
 	}
 }
 
@@ -338,7 +324,7 @@ function generateBackdropShapes() {
 }
 
 function drawBackdropShape(s: BackdropShape, cx: number, cy: number) {
-	const INK = 26;
+	const INK = 0;
 	// Large dashed circles are concentric — pinned to the page center
 	const isConcentric = s.type === "large-dashed-circle";
 	const x = isConcentric ? cx : cx + Math.cos(s.orbitAngle) * s.orbitR;
@@ -442,7 +428,7 @@ function initServiciosBackdrop() {
 		// only corner arcs are visible, giving a subtle border-frame effect.
 		push();
 		translate(cx, cy);
-		stroke(26, 26, 26, 50);
+		stroke(0, 0, 0, 50);
 		strokeWeight(1.5);
 		noFill();
 		drawingContext.save();
@@ -458,7 +444,7 @@ function initServiciosBackdrop() {
 		push();
 		translate(cx, cy);
 		rotate(encloseCircleSpin);
-		stroke(26, 26, 26, 70);
+		stroke(0, 0, 0, 70);
 		strokeWeight(1.5);
 		noFill();
 		drawingContext.save();
@@ -474,7 +460,7 @@ function initServiciosBackdrop() {
 		push();
 		translate(cx, cy);
 		rotate(hugeCircleSpin);
-		stroke(26, 26, 26, 55);
+		stroke(0, 0, 0, 55);
 		strokeWeight(1.5);
 		noFill();
 		drawingContext.save();

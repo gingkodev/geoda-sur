@@ -482,7 +482,7 @@ if (window.innerWidth >= 768) {
 	};
 
 	(window as any).draw = function() {
-		background("#f5f3ef");
+		background("#F9F9F9");
 		if (!items.length) return;
 		offsetX += (targetOffsetX - offsetX) * 0.12;
 		offsetY += (targetOffsetY - offsetY) * 0.12;
@@ -603,10 +603,10 @@ function drawItems() {
 			(window as any).drawingContext.drawImage(item.imgEl, screen.x, screen.y, w, h);
 		} else {
 			noStroke();
-			fill(255);
+			fill(0);
 			rect(screen.x, screen.y, w, h);
 
-			stroke(180);
+			stroke(249);
 			strokeWeight(0.5);
 			const padding = 8 * zoom;
 			for (let ly = screen.y + padding; ly < screen.y + h - padding; ly += 6 * zoom) {
@@ -627,7 +627,7 @@ function drawCrosshairLines(idx: number) {
 	const centerX = screen.x + w / 2;
 	const centerY = screen.y + h / 2;
 
-	stroke(26);
+	stroke(0);
 	strokeWeight(1);
 	line(0, centerY, width, centerY);
 	line(centerX, 0, centerX, height);
@@ -640,7 +640,7 @@ function drawCrosshairLines(idx: number) {
 	noStroke();
 	textAlign(LEFT, TOP);
 	textSize(11);
-	fill(100);
+	fill(0);
 	const pos = placeLabel(idx, fullLabel);
 	text(fullLabel, pos.x, pos.y);
 	pop();
@@ -714,7 +714,7 @@ function drawLatitudeRuler() {
 
 	textSize(9);
 	textAlign(RIGHT, CENTER);
-	fill(26);
+	fill(0);
 	noStroke();
 
 	const startLat =
@@ -726,7 +726,7 @@ function drawLatitudeRuler() {
 		const wy = -lat * PIXELS_PER_DEGREE;
 		const screen = worldToScreen(0, wy);
 		if (screen.y > RULER_HEIGHT && screen.y < height) {
-			stroke(26);
+			stroke(0);
 			strokeWeight(1);
 			line(RULER_WIDTH - 8, screen.y, RULER_WIDTH, screen.y);
 			noStroke();
@@ -745,7 +745,7 @@ function drawLongitudeRuler() {
 
 	textSize(9);
 	textAlign(CENTER, BOTTOM);
-	fill(26);
+	fill(0);
 	noStroke();
 
 	const startLon =
@@ -757,7 +757,7 @@ function drawLongitudeRuler() {
 		const wx = lon * PIXELS_PER_DEGREE;
 		const screen = worldToScreen(wx, 0);
 		if (screen.x > RULER_WIDTH && screen.x < width) {
-			stroke(26);
+			stroke(0);
 			strokeWeight(1);
 			line(screen.x, RULER_HEIGHT - 8, screen.x, RULER_HEIGHT);
 			noStroke();
@@ -785,14 +785,14 @@ function drawScaleBar() {
 	const barY = height - 24;
 
 	push();
-	stroke(26);
+	stroke(0);
 	strokeWeight(1);
 	line(barX, barY, barX + barPx, barY);
 	line(barX, barY - 4, barX, barY + 4);
 	line(barX + barPx, barY - 4, barX + barPx, barY + 4);
 
 	noStroke();
-	fill(26);
+	fill(0);
 	textSize(9);
 	textAlign(CENTER, BOTTOM);
 	const label = niceDeg >= 1 ? `${niceDeg}°` : `${(niceDeg * 60).toFixed(0)}'`;
@@ -901,7 +901,7 @@ function buildListView() {
 				const titleEl = document.createElement("div");
 				titleEl.textContent = item.title.toUpperCase();
 				titleEl.className = "w-full text-xl leading-[1.05] font-medium uppercase tracking-tight";
-				titleEl.style.color = "#f5f3ef";
+				titleEl.style.color = "#F9F9F9";
 				titleEl.style.textAlign = "justify";
 				(titleEl.style as any).textAlignLast = "justify";
 				overlay.appendChild(titleEl);

@@ -120,7 +120,7 @@ export function createBogeySketch(analyser: AnalyserNode, containerEl?: HTMLElem
   const freqData = new Uint8Array(analyser.frequencyBinCount);
   let bogeyData: TimeSlice[] = [];
   let frameCounter = 0;
-  let baseColor: [number, number, number] = [200, 220, 200];
+  let baseColor: [number, number, number] = [249, 249, 249];
   let colCursor = 0; // current time-slice column, wraps around
 
   return (p: any) => {

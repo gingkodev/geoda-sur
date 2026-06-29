@@ -5,11 +5,15 @@ import { getProjects, getServices, type Project, type Service } from "../shared/
 import { getAnalyser, ensureAudioContext } from "./audio-analyser";
 import { createBogeySketch } from "./sketch";
 import { t, currentLang, switchLang } from "../shared/i18n";
-import { POST, AUDIO, NOTE, HOVER_BG } from "../shared/colors";
+import { HOVER_BG } from "../shared/colors";
 
 declare const p5: any;
 
-const CARD_COLORS = [POST, AUDIO, NOTE];
+// Monochrome scheme: black text boxes, light type. The hero "bogey" stays a
+// single light tone so it still reads over the darkened project image.
+const CARD_BG = "#000000";
+const CARD_TEXT = "#F9F9F9";
+const BOGEY_COLOR = "#F9F9F9";
 
 initCursor();
 
@@ -67,7 +71,7 @@ function moveSketchTo(slug: string) {
 	const container = canvasContainers.get(slug);
 	if (!container) return;
 
-	const color = slugColors.get(slug) ?? POST;
+	const color = slugColors.get(slug) ?? BOGEY_COLOR;
 
 	if (sketchInstance) {
 		// Clear old bogeys, wipe stale canvas pixels so they don't flash
@@ -172,9 +176,6 @@ function render(projects: Project[], services: Service[]) {
 		serviceMap.set(s.id, s.name);
 	}
 
-	// Shuffle colors so they feel random but stable per session
-	const colorOrder = [...CARD_COLORS].sort(() => Math.random() - 0.5);
-
 	// Add lang toggle to sidebar
 	addLangToggle();
 
@@ -222,7 +223,6 @@ function render(projects: Project[], services: Service[]) {
 	for (let i = 0; i < projects.length; i++) {
 		const project = projects[i];
 		const slug = slugify(project.name);
-		const color = colorOrder[i % colorOrder.length];
 		const serviceNames = project.service_ids
 			.map((id) => serviceMap.get(id))
 			.filter(Boolean) as string[];
@@ -259,7 +259,7 @@ function render(projects: Project[], services: Service[]) {
 		canvasContainer.id = `canvas-${slug}`;
 		hero.appendChild(canvasContainer);
 		canvasContainers.set(slug, canvasContainer);
-		slugColors.set(slug, color);
+		slugColors.set(slug, BOGEY_COLOR);
 
 		section.appendChild(hero);
 
@@ -269,7 +269,8 @@ function render(projects: Project[], services: Service[]) {
 		contentWrap.className = "flex-1 flex flex-col bg-white";
 
 		const content = document.createElement("div");
-		content.style.backgroundColor = color;
+		content.style.backgroundColor = CARD_BG;
+		content.style.color = CARD_TEXT;
 		content.className = isMobile
 			? "px-4 py-8 flex-1"
 			: "px-6 py-12 flex-1 overflow-y-auto";
@@ -383,7 +384,7 @@ function setActiveProject(slug: string, projects: Project[]) {
 		const link = el as HTMLElement;
 		if (link.dataset.slug === slug) {
 			link.style.backgroundColor = HOVER_BG;
-			link.style.color = "#1a1a1a";
+			link.style.color = "#000000";
 		} else {
 			link.style.backgroundColor = "";
 			link.style.color = "";
