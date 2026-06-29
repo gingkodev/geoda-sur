@@ -30,6 +30,7 @@ CREATE TABLE services (
     description TEXT            NOT NULL,
     description_en TEXT         NULL,
     slug        VARCHAR(255)    NULL,
+    link_url    VARCHAR(512)    NULL,
     is_deleted  TINYINT(1)      NOT NULL DEFAULT 0,
     date_created TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP,
     date_updated TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

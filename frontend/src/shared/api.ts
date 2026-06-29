@@ -51,6 +51,7 @@ export interface Service {
 	id: number;
 	name: string;
 	description: string;
+	link_url: string | null;
 	date_created: string;
 }
 

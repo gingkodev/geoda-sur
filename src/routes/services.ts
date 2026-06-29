@@ -88,11 +88,11 @@ router.get("/:id", async (req, res) => {
 // POST /api/services
 router.post("/", requireAuth, async (req, res) => {
   try {
-    const { name, name_en, description, description_en } = req.body;
+    const { name, name_en, description, description_en, link_url } = req.body;
     const slug = slugify(name);
     const [result] = await pool.query<ResultSetHeader>(
-      `INSERT INTO services (name, name_en, slug, description, description_en) VALUES (?, ?, ?, ?, ?)`,
-      [name, name_en ?? null, slug, description, description_en ?? null]
+      `INSERT INTO services (name, name_en, slug, description, description_en, link_url) VALUES (?, ?, ?, ?, ?, ?)`,
+      [name, name_en ?? null, slug, description, description_en ?? null, link_url ?? null]
     );
     res.status(201).json({ id: result.insertId });
   } catch (err) {
@@ -104,11 +104,11 @@ router.post("/", requireAuth, async (req, res) => {
 // PUT /api/services/:id
 router.put("/:id", requireAuth, async (req, res) => {
   try {
-    const { name, name_en, description, description_en } = req.body;
+    const { name, name_en, description, description_en, link_url } = req.body;
     const slug = slugify(name);
     const [result] = await pool.query<ResultSetHeader>(
-      `UPDATE services SET name = ?, name_en = ?, slug = ?, description = ?, description_en = ? WHERE id = ? AND is_deleted = 0`,
-      [name, name_en ?? null, slug, description, description_en ?? null, req.params.id]
+      `UPDATE services SET name = ?, name_en = ?, slug = ?, description = ?, description_en = ?, link_url = ? WHERE id = ? AND is_deleted = 0`,
+      [name, name_en ?? null, slug, description, description_en ?? null, link_url ?? null, req.params.id]
     );
     if (!result.affectedRows) return res.status(404).json({ error: "Not found" });
     res.json({ updated: true });

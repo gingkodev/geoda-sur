@@ -8,7 +8,6 @@ const strings: Record<string, Record<Lang, string>> = {
   "nav.projects": { es: "Proyectos", en: "Projects" },
   "nav.services": { es: "Servicios", en: "Services" },
   "nav.blog": { es: "Blog", en: "Blog" },
-  "nav.rental": { es: "Rental", en: "Rental" },
   "nav.training": { es: "Formación", en: "Training" },
   "nav.contact": { es: "Contacto", en: "Contact" },
 

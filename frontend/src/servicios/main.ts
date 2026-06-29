@@ -73,10 +73,13 @@ function renderIndex() {
 			const list = document.getElementById("services-index")!;
 			services.forEach((s) => {
 				const slug = slugify(s.name);
+				const external = s.link_url
+					? ` href="${s.link_url}" target="_blank" rel="noopener noreferrer"`
+					: ` href="/servicios/${slug}"`;
 				const li = document.createElement("li");
 				li.className = "service-row py-2 md:py-2.5";
 				li.innerHTML = `
-					<a href="/servicios/${slug}"
+					<a${external}
 						 class="service-link inline-block px-1.5 py-0.5 no-underline text-ink hover:bg-ink hover:text-cream transition-colors duration-150 text-[11px] md:text-xs uppercase font-light tracking-[0.18em] leading-tight">
 						${s.name}
 					</a>

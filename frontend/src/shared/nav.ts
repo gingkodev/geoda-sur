@@ -11,7 +11,6 @@ export function getLinks(): NavLink[] {
     { label: t("nav.projects"), href: "/proyectos" },
     { label: t("nav.services"), href: "/servicios" },
     { label: t("nav.blog"), href: "/blog" },
-    { label: t("nav.rental"), href: "/rental" },
     { label: t("nav.training"), href: "/formacion" },
     { label: t("nav.contact"), href: "/contacto" },
   ];
