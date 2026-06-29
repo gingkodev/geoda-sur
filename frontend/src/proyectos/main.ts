@@ -9,10 +9,10 @@ import { HOVER_BG } from "../shared/colors";
 
 declare const p5: any;
 
-// Monochrome scheme: black text boxes, light type. The hero "bogey" stays a
+// Project description box: light bg, black type. The hero "bogey" stays a
 // single light tone so it still reads over the darkened project image.
-const CARD_BG = "#000000";
-const CARD_TEXT = "#F9F9F9";
+const CARD_BG = "#F9F9F9";
+const CARD_TEXT = "#000000";
 const BOGEY_COLOR = "#F9F9F9";
 
 initCursor();
