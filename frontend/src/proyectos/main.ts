@@ -266,14 +266,14 @@ function render(projects: Project[], services: Service[]) {
 		// --- Content card ---
 		// Wrapper with white bg so the sidebar region stays white
 		const contentWrap = document.createElement("div");
-		contentWrap.className = "flex-1 flex flex-col bg-white";
+		contentWrap.className = "flex-1 flex flex-col bg-white min-h-0";
 
 		const content = document.createElement("div");
 		content.style.backgroundColor = CARD_BG;
 		content.style.color = CARD_TEXT;
 		content.className = isMobile
 			? "px-4 py-8 flex-1"
-			: "px-6 py-12 flex-1 overflow-y-auto";
+			: "px-6 py-12 flex-1 overflow-y-auto min-h-0";
 
 		const inner = document.createElement("div");
 		inner.className = isMobile

@@ -3,12 +3,13 @@ import { initCursor } from "../shared/cursor";
 import { initNav, initMobileNav } from "../shared/nav";
 import { getBlog, type BlogEntry } from "../shared/api";
 import { t } from "../shared/i18n";
-import { HOVER_BG } from "../shared/colors";
 
-// Monochrome cards: black box, light type; hover inverts to a light ghost card.
-const CARD_BG = "#000000";
-const CARD_TEXT = "#F9F9F9";
-const HOVER_TEXT = "#000000";
+// Blog cards: light box, black type, dashed outline at rest; hover inverts to a
+// solid black box with light type (the dashed border vanishes against black).
+const CARD_BG = "#F9F9F9";
+const CARD_TEXT = "#000000";
+const HOVER_BG = "#000000";
+const HOVER_TEXT = "#F9F9F9";
 
 // p5.js globals
 declare const createCanvas: any;
@@ -118,7 +119,7 @@ function renderMobileBlog(entries: BlogEntry[]) {
 	}
 	for (const entry of entries) {
 		const card = document.createElement("div");
-		card.className = "p-3.5 text-[11px] leading-[15px] border border-transparent";
+		card.className = "p-3.5 text-[11px] leading-[15px] border border-dashed border-black/60";
 		card.style.backgroundColor = CARD_BG;
 		card.style.color = CARD_TEXT;
 		if (entry.slug) card.id = entry.slug;
@@ -355,6 +356,7 @@ function renderCards() {
       width: ${Math.round(item.w)}px; height: ${Math.round(item.h)}px;
       background-color: ${item.bgColor};
       color: ${CARD_TEXT};
+      border: 1px dashed rgba(0,0,0,0.6);
       transition: border 0.15s, background-color 0.15s, color 0.15s;
     `;
 		el.innerHTML = buildCardHTML(item, false);
@@ -375,7 +377,7 @@ function renderCards() {
 			if (!el.classList.contains("blog-selected")) {
 				el.style.backgroundColor = item.bgColor;
 				el.style.color = CARD_TEXT;
-				el.style.border = "1px solid transparent";
+				el.style.border = "1px dashed rgba(0,0,0,0.6)";
 			}
 		});
 
@@ -443,12 +445,14 @@ function selectItem(index: number) {
 			el.classList.add("blog-selected");
 			el.style.backgroundColor = item.bgColor;
 			el.style.color = CARD_TEXT;
-			el.style.border = "1px solid transparent";
+			el.style.border = "1px dashed rgba(0,0,0,0.6)";
 			el.style.opacity = "1";
 			el.style.pointerEvents = "auto";
 			el.style.zIndex = "100";
 			if (item.type !== "audio") {
 				el.style.height = "auto";
+				el.style.maxHeight = "calc(100vh - 80px)";
+				el.style.overflowY = "auto";
 				el.style.minWidth = "min(460px, calc(100vw - 40px))";
 				el.style.fontSize = "12px";
 				el.style.lineHeight = "18px";
@@ -456,6 +460,12 @@ function selectItem(index: number) {
 				el.style.userSelect = "text";
 			}
 			el.innerHTML = buildCardHTML(item, true);
+			if (item.type !== "audio") {
+				// Re-center on the expanded card (clamped height) so long
+				// writeups stay fully on-screen and can scroll inside.
+				targetOffsetX = item.x + el.offsetWidth / 2;
+				targetOffsetY = item.y + el.offsetHeight / 2;
+			}
 		} else {
 			el.style.opacity = "0";
 			el.style.pointerEvents = "none";
@@ -496,12 +506,14 @@ function deselectItem() {
 		}
 		// Reset expanded styles
 		el.style.height = Math.round(item.h) + "px";
+			el.style.maxHeight = "";
+			el.style.overflowY = "";
 		el.style.minWidth = "";
 		el.style.fontSize = "";
 		el.style.lineHeight = "";
 		el.style.padding = "";
 		el.style.userSelect = "";
-		el.style.border = "1px solid transparent";
+		el.style.border = "1px dashed rgba(0,0,0,0.6)";
 		el.style.backgroundColor = item.bgColor;
 		el.style.color = CARD_TEXT;
 		el.innerHTML = buildCardHTML(item, false);
