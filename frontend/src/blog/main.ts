@@ -21,13 +21,10 @@ declare const push: any;
 declare const pop: any;
 declare const translate: any;
 declare const rotate: any;
-declare const stroke: any;
-declare const strokeWeight: any;
-declare const noStroke: any;
-declare const fill: any;
-declare const noFill: any;
-declare const ellipse: any;
-declare const triangle: any;
+declare const image: any;
+declare const loadImage: any;
+declare const frameCount: number;
+declare const drawingContext: any;
 declare const width: number;
 declare const height: number;
 declare const mouseX: number;
@@ -56,14 +53,43 @@ let selectedItem: number | null = null;
 let audioElements: Record<number, HTMLAudioElement> = {};
 
 interface Doodle {
-	x: number;
+	x: number; // world rest position
 	y: number;
-	type: string;
+	imgIndex: number;
 	size: number;
 	rotation: number;
+	phaseX: number; // idle-drift phase, per axis so the path loops instead of tracing a line
+	phaseY: number;
+	ox: number; // push displacement from rest (world units)
+	oy: number;
+	vx: number; // push velocity
+	vy: number;
 }
 
 let doodles: Doodle[] = [];
+
+// Doodle PNGs — uniform random pick per doodle, glob order doesn't matter here.
+const DOODLE_IMAGE_URLS = Object.values(
+	import.meta.glob("./doodles/*.png", { eager: true, query: "?url", import: "default" })
+) as string[];
+let doodleImages: any[] = [];
+
+const DOODLE_SIZE_MIN = 96;// px — PNGs carry more detail than the old procedural primitives
+const DOODLE_SIZE_MAX = 130;
+
+// Idle drift — small per-doodle wander so the field feels alive at rest.
+const DRIFT_AMP = 24; // px
+const DRIFT_SPEED = 0.01; // rad/frame — ~10.5s period at 60fps
+
+// Mouse-velocity push — doodles near the cursor get shoved away, then spring home.
+const PUSH_RADIUS = 140; // world px
+const PUSH_STRENGTH = 0.08; // tune to taste — scales (falloff * mouse speed) into a velocity impulse
+const DAMPING = 0.88;
+const SPRING_K = 0.02;
+const MOUSE_SPEED_CLAMP = 60; // px/frame, clamps tracked cursor speed before it drives the push
+
+let mouseVelX = 0;
+let mouseVelY = 0;
 
 const worldEl = document.getElementById("world");
 const viewportEl = document.getElementById("viewport");
@@ -151,7 +177,7 @@ const typeStyles: Record<string, { bgColor: string; w: number; h: number }> = {
 };
 
 function buildBlogItems(entries: BlogEntry[]) {
-	items = entries.map((entry, i) => {
+	items = entries.map((entry) => {
 		const style = typeStyles[entry.type] ?? typeStyles.post;
 		const r = Math.pow(Math.random(), 0.5) * 600 + 100;
 		const angle = Math.random() * Math.PI * 2;
@@ -265,78 +291,88 @@ function poissonDiskSampling(w: number, h: number, minDist: number, k = 30) {
 
 function generateDoodles() {
 	doodles = [];
-	const doodleTypes = [
-		"triangle-outline",
-		"triangle-filled",
-		"circle-outline",
-		"circle-filled",
-		"double-circle-dot",
-		"small-dot",
-	];
 	const points = poissonDiskSampling(2400, 1800, 250);
 	for (const pt of points) {
-		const type = doodleTypes[Math.floor(Math.random() * doodleTypes.length)];
-		const isTriangle = type === "triangle-outline" || type === "triangle-filled";
-		const triangleRotations = [0, Math.PI / 2, -Math.PI / 2];
-		const rotation = isTriangle
-			? triangleRotations[Math.floor(Math.random() * triangleRotations.length)]
-			: Math.random() * Math.PI * 2;
 		doodles.push({
 			x: pt.x - 1200,
 			y: pt.y - 900,
-			type,
-			size: 9 + Math.random() * 9,
-			rotation,
+			imgIndex: Math.floor(Math.random() * DOODLE_IMAGE_URLS.length),
+			size: DOODLE_SIZE_MIN + Math.random() * (DOODLE_SIZE_MAX - DOODLE_SIZE_MIN),
+			rotation: Math.random() * Math.PI * 2,
+			phaseX: Math.random() * Math.PI * 2,
+			phaseY: Math.random() * Math.PI * 2,
+			ox: 0,
+			oy: 0,
+			vx: 0,
+			vy: 0,
 		});
 	}
 }
 
-function drawDoodles() {
-	const alpha = selectedItem !== null ? 80 : 255;
+// Push-physics + spring-back integration, run every frame for every doodle
+// (only ~100 of them — trivial). Runs unconditionally, independent of
+// which doodles are actually on-screen, so off-screen ones keep springing
+// home instead of freezing mid-displacement.
+function updateDoodlePhysics() {
+	const worldMouseX = mouseX - width / 2 + offsetX;
+	const worldMouseY = mouseY - height / 2 + offsetY;
+	const mouseSpeed = Math.sqrt(mouseVelX * mouseVelX + mouseVelY * mouseVelY);
+
 	for (const d of doodles) {
-		const sx = d.x - offsetX + width / 2;
-		const sy = d.y - offsetY + height / 2;
+		const px = d.x + d.ox;
+		const py = d.y + d.oy;
+		const dx = px - worldMouseX;
+		const dy = py - worldMouseY;
+		const dist = Math.sqrt(dx * dx + dy * dy);
+
+		if (dist > 0.01 && dist < PUSH_RADIUS) {
+			const t = 1 - dist / PUSH_RADIUS;
+			const falloff = t * t; // smooth ease-out toward the radius edge
+			const impulse = PUSH_STRENGTH * falloff * mouseSpeed;
+			d.vx += (dx / dist) * impulse;
+			d.vy += (dy / dist) * impulse;
+		}
+
+		// Spring back to rest, then damp.
+		d.vx += -d.ox * SPRING_K;
+		d.vy += -d.oy * SPRING_K;
+		d.vx *= DAMPING;
+		d.vy *= DAMPING;
+		d.ox += d.vx;
+		d.oy += d.vy;
+	}
+
+	// Tracked speed decays on its own between mousemove events so a
+	// stationary cursor stops pushing shortly after motion stops.
+	mouseVelX *= 0.85;
+	mouseVelY *= 0.85;
+}
+
+function drawDoodles() {
+	const dimmed = selectedItem !== null;
+	if (dimmed) drawingContext.globalAlpha = 0.3;
+
+	for (const d of doodles) {
+		const img = doodleImages[d.imgIndex];
+		if (!img || !img.width) continue; // not decoded yet — skip this frame
+
+		const driftX = Math.sin(frameCount * DRIFT_SPEED + d.phaseX) * DRIFT_AMP;
+		const driftY = Math.sin(frameCount * DRIFT_SPEED + d.phaseY) * DRIFT_AMP;
+
+		const worldX = d.x + d.ox + driftX;
+		const worldY = d.y + d.oy + driftY;
+		const sx = worldX - offsetX + width / 2;
+		const sy = worldY - offsetY + height / 2;
 		if (sx < -50 || sx > width + 50 || sy < -50 || sy > height + 50) continue;
 
 		push();
 		translate(sx, sy);
 		rotate(d.rotation);
-		stroke(0, alpha);
-		strokeWeight(1);
-		noFill();
-
-		switch (d.type) {
-			case "triangle-outline":
-				triangle(-d.size / 2, d.size / 3, d.size / 2, d.size / 3, 0, -d.size / 2);
-				break;
-			case "triangle-filled":
-				fill(0, alpha);
-				noStroke();
-				triangle(-d.size / 2, d.size / 3, d.size / 2, d.size / 3, 0, -d.size / 2);
-				break;
-			case "circle-outline":
-				ellipse(0, 0, d.size, d.size);
-				break;
-			case "circle-filled":
-				fill(0, alpha);
-				noStroke();
-				ellipse(0, 0, d.size * 0.4, d.size * 0.4);
-				break;
-			case "double-circle-dot":
-				ellipse(0, 0, d.size, d.size);
-				ellipse(d.size * 0.5, 0, d.size * 0.6, d.size * 0.6);
-				fill(0, alpha);
-				noStroke();
-				ellipse(d.size * 0.5, 0, d.size * 0.2, d.size * 0.2);
-				break;
-			case "small-dot":
-				fill(0, alpha);
-				noStroke();
-				ellipse(0, 0, d.size * 0.3, d.size * 0.3);
-				break;
-		}
+		image(img, -d.size / 2, -d.size / 2, d.size, d.size);
 		pop();
 	}
+
+	if (dimmed) drawingContext.globalAlpha = 1;
 }
 
 // --- DOM cards ---
@@ -506,8 +542,8 @@ function deselectItem() {
 		}
 		// Reset expanded styles
 		el.style.height = Math.round(item.h) + "px";
-			el.style.maxHeight = "";
-			el.style.overflowY = "";
+		el.style.maxHeight = "";
+		el.style.overflowY = "";
 		el.style.minWidth = "";
 		el.style.fontSize = "";
 		el.style.lineHeight = "";
@@ -585,6 +621,8 @@ if (!isMobile) {
 		c.style("left", "0");
 		c.style("z-index", "0");
 		c.style("pointer-events", "none");
+
+		doodleImages = DOODLE_IMAGE_URLS.map((url) => loadImage(url));
 	};
 
 	(window as any).draw = function() {
@@ -592,6 +630,7 @@ if (!isMobile) {
 		offsetX += (targetOffsetX - offsetX) * 0.12;
 		offsetY += (targetOffsetY - offsetY) * 0.12;
 		if (worldEl) worldEl.style.transform = `translate(${-offsetX}px, ${-offsetY}px)`;
+		updateDoodlePhysics();
 		drawDoodles();
 		updateCoords();
 	};
@@ -622,6 +661,21 @@ if (!isMobile) {
 		offsetY = targetOffsetY;
 		lastMouseX = e.clientX;
 		lastMouseY = e.clientY;
+	});
+
+	// Doodle push physics — tracks raw cursor speed independent of the pan/drag
+	// state above; decayed each frame in updateDoodlePhysics().
+	let lastVelMouseX = 0;
+	let lastVelMouseY = 0;
+	let hasLastVelMouse = false;
+	window.addEventListener("mousemove", (e) => {
+		if (hasLastVelMouse) {
+			mouseVelX = Math.max(-MOUSE_SPEED_CLAMP, Math.min(MOUSE_SPEED_CLAMP, e.clientX - lastVelMouseX));
+			mouseVelY = Math.max(-MOUSE_SPEED_CLAMP, Math.min(MOUSE_SPEED_CLAMP, e.clientY - lastVelMouseY));
+		}
+		lastVelMouseX = e.clientX;
+		lastVelMouseY = e.clientY;
+		hasLastVelMouse = true;
 	});
 
 	window.addEventListener("mouseup", () => {
