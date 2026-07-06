@@ -10,3 +10,11 @@ js/notas-*.txt
 database-scheme.txt
 misc
 proyectos-sketch.js
+
+# raw doodle/symbol source material — the used copies live in frontend/src/*/
+pngs-inti-blogs
+pngs-inti-proyectos
+pngs blog.zip
+pngs proyectos.zip
+__MACOSX
+cardinal-notas-finales.txt
