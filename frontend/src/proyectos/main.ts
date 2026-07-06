@@ -229,9 +229,11 @@ function render(projects: Project[], services: Service[]) {
 
 		const section = document.createElement("section");
 		section.id = slug;
-		section.className = isMobile
-			? "project-section flex flex-col min-h-screen"
-			: "project-section flex flex-col h-screen";
+		// min-h-screen (both): short descriptions still fill the viewport so the
+		// next project doesn't peek; long ones grow the section past 100vh so the
+		// page scrolls naturally into the next project instead of trapping a
+		// nested scroll area.
+		section.className = "project-section flex flex-col min-h-screen";
 		if (!isMobile) section.style.scrollSnapAlign = "start";
 
 		// --- Hero (image + canvas overlay) ---
@@ -266,14 +268,14 @@ function render(projects: Project[], services: Service[]) {
 		// --- Content card ---
 		// Wrapper with white bg so the sidebar region stays white
 		const contentWrap = document.createElement("div");
-		contentWrap.className = "flex-1 flex flex-col bg-white min-h-0";
+		contentWrap.className = "flex-1 flex flex-col bg-white";
 
 		const content = document.createElement("div");
 		content.style.backgroundColor = CARD_BG;
 		content.style.color = CARD_TEXT;
 		content.className = isMobile
 			? "px-4 py-8 flex-1"
-			: "px-6 py-12 flex-1 overflow-y-auto min-h-0";
+			: "px-6 py-12 flex-1";
 
 		const inner = document.createElement("div");
 		inner.className = isMobile
@@ -320,7 +322,10 @@ function render(projects: Project[], services: Service[]) {
 				}
 			}
 		},
-		{ root: container, threshold: 0.5 },
+		// Active = the section crossing the container's vertical midline. Works
+		// regardless of section height — a long (>100vh) section can never reach a
+		// 0.5 visibility ratio, so threshold-based detection would miss it.
+		{ root: container, rootMargin: "-50% 0px -50% 0px", threshold: 0 },
 	);
 
 	sections.forEach((s) => observer.observe(s));
