@@ -1,223 +1,245 @@
 // Audio-reactive bogey sketch — p5.js instance mode
-// Bogeys appear left-to-right across the canvas like a timeline.
-// When the right edge is reached, wraps back to the left.
-// Color matches the project's card color.
-
-interface BandSlice {
-  amp: number;
-  jitterY: number;
-  shapeIndex: number;
-}
+// Each frequency band draws a continuous dotted trail across the canvas,
+// like a contour line: a single repeated glyph stamped edge-to-edge along
+// the curve traced by that band's amplitude over time.
 
 interface TimeSlice {
-  bands: BandSlice[];
+	// One Y per band for this time-slice column, or null if the band was
+	// below SPAWN_THRESHOLD at sample time (a deliberate trail gap).
+	points: (number | null)[];
 }
 
 // Band definitions: [lowBin, highBin] out of fftSize/2 = 256 bins
 const BAND_RANGES: [number, number][] = [
-  [0, 8],      // sub-bass
-  [8, 24],     // bass
-  [24, 56],    // low-mid
-  [56, 112],   // mid
-  [112, 180],  // high-mid
-  [180, 256],  // treble
+	[0, 8],      // sub-bass
+	[8, 24],     // bass
+	[24, 56],    // low-mid
+	[56, 112],   // mid
+	[112, 180],  // high-mid
+	[180, 256],  // treble
 ];
 
 const NUM_BANDS = BAND_RANGES.length;
 const MAX_TIME_SLICES = 60;
 const SAMPLE_INTERVAL = 12;   // sample every N frames
 const SPAWN_THRESHOLD = 40;   // min amplitude to draw
+const STRIP_PADDING = 10;     // keep the curve this far from strip top/bottom
+const EMA_FACTOR = 0.5;       // per-sample smoothing so curves flow, not zigzag
+const SYMBOL_SIZE = 18;       // px — fixed glyph box size
+const STAMP_SPACING = SYMBOL_SIZE * 0.6; // px between stamp centers — deliberately tighter than
+                                          // SYMBOL_SIZE so consecutive glyphs overlap a bit within a trail
 
-type RGB = [number, number, number];
-type BogeyDrawFn = (p: any, x: number, y: number, s: number, color: RGB, alpha: number) => void;
+// Per-band trail rotation, degrees, index-aligned with BAND_RANGES
+// (sub-bass, bass, low-mid, mid, high-mid, treble). A knob to experiment
+// with — bass currently runs at 45°, high-mid runs vertical.
+const BAND_ANGLES = [0, 45, 0, 0, 90, 0];
 
-// CRT / radar-vector workshop — each shape fits a 2s monospace box.
-// Each shape sets its own fill/stroke explicitly; the next call always
-// overwrites both, so push/pop is only needed where matrix state is touched.
+// Bogey PNG symbols, keyed by filename (glob order is just alphabetical
+// and not meaningful here).
+const bogeyGlob = import.meta.glob("./bogeys/*.png", {
+	eager: true,
+	query: "?url",
+	import: "default",
+}) as Record<string, string>;
 
-function drawBogeyDiamond(p: any, x: number, y: number, s: number, color: RGB, alpha: number) {
-  const [cr, cg, cb] = color;
-  p.noFill();
-  p.stroke(cr, cg, cb, alpha);
-  p.strokeWeight(Math.max(1.5, s * 0.2));
-  p.quad(x, y - s, x + s, y, x, y + s, x - s, y);
+function urlFor(filename: string): string {
+	const url = bogeyGlob[`./bogeys/${filename}`];
+	if (!url) throw new Error(`bogey asset not found: ${filename}`);
+	return url;
 }
 
-function drawBogeyCross(p: any, x: number, y: number, s: number, color: RGB, alpha: number) {
-  const [cr, cg, cb] = color;
-  p.noStroke();
-  p.fill(cr, cg, cb, alpha);
-  const t = s * 0.3;
-  const len = s * 2;
-  p.rect(x - s, y - t / 2, len, t);
-  p.rect(x - t / 2, y - s, t, len);
-}
-
-function drawBogeySquare(p: any, x: number, y: number, s: number, color: RGB, alpha: number) {
-  const [cr, cg, cb] = color;
-  p.noStroke();
-  p.fill(cr, cg, cb, alpha);
-  p.rect(x - s, y - s, s * 2, s * 2);
-}
-
-function drawBogeyChevron(p: any, x: number, y: number, s: number, color: RGB, alpha: number) {
-  const [cr, cg, cb] = color;
-  p.noStroke();
-  p.fill(cr, cg, cb, alpha);
-  const t = s * 0.4;
-  const top = y - s * 0.2;
-  p.beginShape();
-  p.vertex(x - s, top);
-  p.vertex(x, y - s);
-  p.vertex(x + s, top);
-  p.vertex(x + s, top + t);
-  p.vertex(x, y - s + t);
-  p.vertex(x - s, top + t);
-  p.endShape(p.CLOSE);
-}
-
-function drawBogeyRing(p: any, x: number, y: number, s: number, color: RGB, alpha: number) {
-  const [cr, cg, cb] = color;
-  p.noFill();
-  p.stroke(cr, cg, cb, alpha);
-  p.strokeWeight(Math.max(1.5, s * 0.2));
-  p.circle(x, y, s * 1.8);
-}
-
-function drawBogeyTee(p: any, x: number, y: number, s: number, color: RGB, alpha: number) {
-  const [cr, cg, cb] = color;
-  const t = s * 0.3;
-  const len = s * 2;
-  p.push();
-  p.translate(x, y);
-  p.rotate(p.QUARTER_PI);
-  p.noStroke();
-  p.fill(cr, cg, cb, alpha);
-  p.rect(-len / 2, -s, len, t);
-  p.rect(-t / 2, -t * 2.4, t, t * 2);
-  p.pop();
-}
-
-const BOGEY_DRAW_FUNCS: BogeyDrawFn[] = [
-  drawBogeyDiamond,
-  drawBogeyCross,
-  drawBogeySquare,
-  drawBogeyChevron,
-  drawBogeyRing,
-  drawBogeyTee,
+// One fixed glyph per band, index-aligned with BAND_RANGES
+// (sub-bass, bass, low-mid, mid, high-mid, treble).
+// barra.png, estrella-2.png, estrella-3.png stay unused for now.
+const BAND_GLYPH_URLS = [
+	urlFor("o.png"),
+	urlFor("x.png"),
+	urlFor("punto.png"),
+	urlFor("guion.png"),
+	urlFor("o2.png"),
+	urlFor("estrella-1.png"),
 ];
 
-function hexToRgb(hex: string): [number, number, number] {
-  const h = hex.replace("#", "");
-  return [
-    parseInt(h.substring(0, 2), 16),
-    parseInt(h.substring(2, 4), 16),
-    parseInt(h.substring(4, 6), 16),
-  ];
-}
-
 export function createBogeySketch(analyser: AnalyserNode, containerEl?: HTMLElement) {
-  const freqData = new Uint8Array(analyser.frequencyBinCount);
-  let bogeyData: TimeSlice[] = [];
-  let frameCounter = 0;
-  let baseColor: [number, number, number] = [249, 249, 249];
-  let colCursor = 0; // current time-slice column, wraps around
+	const freqData = new Uint8Array(analyser.frequencyBinCount);
+	let bogeyData: TimeSlice[] = [];
+	let frameCounter = 0;
+	let colCursor = 0; // current time-slice column, wraps around
 
-  return (p: any) => {
-    let bandHeight: number;
-    let timeSliceWidth: number;
+	// Per-band EMA state — smooths the curve across sample ticks, independent
+	// of which column it lands on. Reset to null on a gap (no continuity
+	// across a break) and by clearBogeys.
+	let prevY: (number | null)[] = new Array(NUM_BANDS).fill(null);
 
-    p.setup = () => {
-      const parent = containerEl ?? p.canvas?.parentElement ?? document.body;
-      p.createCanvas(parent.clientWidth, parent.clientHeight);
-      p.noStroke();
-      recalcLayout();
-    };
+	let bandImages: any[] = [];
 
-    function recalcLayout() {
-      bandHeight = (p.height - 40) / NUM_BANDS;
-      timeSliceWidth = (p.width - 40) / MAX_TIME_SLICES;
-    }
+	return (p: any) => {
+		let bandHeight: number;
+		let timeSliceWidth: number;
 
-    p.draw = () => {
-      p.clear();
-      frameCounter++;
+		p.setup = () => {
+			const parent = containerEl ?? p.canvas?.parentElement ?? document.body;
+			p.createCanvas(parent.clientWidth, parent.clientHeight);
+			p.noStroke();
+			recalcLayout();
 
-      analyser.getByteFrequencyData(freqData);
+			bandImages = BAND_GLYPH_URLS.map((url) => p.loadImage(url));
+		};
 
-      // Check if there's meaningful audio
-      let hasAudio = false;
-      for (let i = 0; i < freqData.length; i++) {
-        if (freqData[i] > 10) { hasAudio = true; break; }
-      }
+		function recalcLayout() {
+			bandHeight = (p.height - 40) / NUM_BANDS;
+			timeSliceWidth = (p.width - 40) / MAX_TIME_SLICES;
+		}
 
-      if (hasAudio && frameCounter % SAMPLE_INTERVAL === 0) {
-        const slice = sampleBands();
-        // Place at current cursor, overwriting old data
-        bogeyData[colCursor] = slice;
-        colCursor = (colCursor + 1) % MAX_TIME_SLICES;
-      }
+		p.draw = () => {
+			p.clear();
+			frameCounter++;
 
-      drawBogeys();
-    };
+			analyser.getByteFrequencyData(freqData);
 
-    p.windowResized = () => {
-      const parent = containerEl ?? p.canvas?.parentElement;
-      if (!parent) return;
-      p.resizeCanvas(parent.clientWidth, parent.clientHeight);
-      recalcLayout();
-    };
+			// Check if there's meaningful audio
+			let hasAudio = false;
+			for (let i = 0; i < freqData.length; i++) {
+				if (freqData[i] > 10) { hasAudio = true; break; }
+			}
 
-    (p as any).setBogeyColor = (hex: string) => {
-      baseColor = hexToRgb(hex);
-    };
+			if (hasAudio && frameCounter % SAMPLE_INTERVAL === 0) {
+				const slice = sampleBands();
+				// Place at current cursor, overwriting old data
+				bogeyData[colCursor] = slice;
+				colCursor = (colCursor + 1) % MAX_TIME_SLICES;
+			}
 
-    (p as any).clearBogeys = () => {
-      bogeyData = [];
-      colCursor = 0;
-    };
+			drawTrails();
+		};
 
-    function sampleBands(): TimeSlice {
-      const bands: BandSlice[] = [];
-      for (let i = 0; i < NUM_BANDS; i++) {
-        const [lo, hi] = BAND_RANGES[i];
-        let sum = 0;
-        let count = 0;
-        for (let b = lo; b < hi; b++) {
-          sum += freqData[b];
-          count++;
-        }
-        const avg = sum / count;
-        if (avg < SPAWN_THRESHOLD) continue;
+		p.windowResized = () => {
+			const parent = containerEl ?? p.canvas?.parentElement;
+			if (!parent) return;
+			p.resizeCanvas(parent.clientWidth, parent.clientHeight);
+			recalcLayout();
+		};
 
-        // Only keep ~40% of qualifying bands — less density
-        if (p.random() > 0.4) continue;
+		(p as any).clearBogeys = () => {
+			bogeyData = [];
+			colCursor = 0;
+			prevY = new Array(NUM_BANDS).fill(null);
+		};
 
-        const stripTop = 20 + i * bandHeight;
-        const jitterY = i === 0
-          ? p.height / 2
-          : p.random(stripTop + 10, stripTop + bandHeight - 10);
+		function sampleBands(): TimeSlice {
+			const points: (number | null)[] = [];
 
-        bands.push({ amp: avg, jitterY, shapeIndex: i % BOGEY_DRAW_FUNCS.length });
-      }
-      return { bands };
-    }
+			for (let i = 0; i < NUM_BANDS; i++) {
+				const [lo, hi] = BAND_RANGES[i];
+				let sum = 0;
+				let count = 0;
+				for (let b = lo; b < hi; b++) {
+					sum += freqData[b];
+					count++;
+				}
+				const avg = sum / count;
 
-    function drawBogeys() {
-      for (let col = 0; col < bogeyData.length; col++) {
-        const slice = bogeyData[col];
-        if (!slice) continue;
-        const baseX = 20 + col * timeSliceWidth;
+				if (avg < SPAWN_THRESHOLD) {
+					points.push(null);
+					prevY[i] = null; // break the flow — next sample starts fresh
+					continue;
+				}
 
-        for (const band of slice.bands) {
-          if (band.amp < SPAWN_THRESHOLD) continue;
+				const stripTop = 20 + i * bandHeight;
+				const stripBottom = stripTop + bandHeight;
+				// quiet -> near strip bottom, loud -> near strip top
+				const target = p.map(
+					avg, SPAWN_THRESHOLD, 255,
+					stripBottom - STRIP_PADDING, stripTop + STRIP_PADDING
+				);
+				const y = prevY[i] == null ? target : p.lerp(prevY[i], target, EMA_FACTOR);
+				prevY[i] = y;
+				points.push(y);
+			}
 
-          const sz = p.map(band.amp, SPAWN_THRESHOLD, 255, 4, 28);
-          const alpha = p.map(band.amp, SPAWN_THRESHOLD, 255, 60, 220);
+			return { points };
+		}
 
-          BOGEY_DRAW_FUNCS[band.shapeIndex](p, baseX, band.jitterY, sz, baseColor, alpha);
-        }
-      }
-    }
-  };
+		function stamp(img: any, x: number, y: number) {
+			// Rotated trails can run off-canvas (a 90° trail is canvas-width long,
+			// drawn vertically) — cheap bounds guard before the image call.
+			if (x < -SYMBOL_SIZE || x > p.width + SYMBOL_SIZE || y < -SYMBOL_SIZE || y > p.height + SYMBOL_SIZE) {
+				return;
+			}
+			p.image(img, x - SYMBOL_SIZE / 2, y - SYMBOL_SIZE / 2, SYMBOL_SIZE, SYMBOL_SIZE);
+		}
+
+		// Rotation is an isometry and linear, so interpolating in local
+		// (unrotated) space and rotating each stamped point afterward still
+		// gives correct, even spacing — no need to touch the walking math below.
+		function rotateAroundCenter(x: number, y: number, cosT: number, sinT: number, cx: number, cy: number) {
+			const dx = x - cx;
+			const dy = y - cy;
+			return { x: cx + dx * cosT - dy * sinT, y: cy + dx * sinT + dy * cosT };
+		}
+
+		function drawTrails() {
+			const cx = p.width / 2;
+			const cy = p.height / 2;
+
+			for (let band = 0; band < NUM_BANDS; band++) {
+				const img = bandImages[band];
+				if (!img || !img.width) continue; // glyph not decoded yet — skip this band this frame
+
+				const angleDeg = BAND_ANGLES[band] ?? 0;
+				const angleRad = (angleDeg * Math.PI) / 180;
+				const cosT = Math.cos(angleRad);
+				const sinT = Math.sin(angleRad);
+
+				// Project a local (unrotated) point to screen space and stamp it.
+				const project = angleDeg === 0
+					? (lx: number, ly: number) => stamp(img, lx, ly)
+					: (lx: number, ly: number) => {
+						const pt = rotateAroundCenter(lx, ly, cosT, sinT, cx, cy);
+						stamp(img, pt.x, pt.y);
+					};
+
+				let hasPrev = false;
+				let prevX = 0;
+				let prevPtY = 0;
+				let sinceLastStamp = 0; // distance travelled since the last stamp, in [0, STAMP_SPACING)
+
+				for (let col = 0; col < bogeyData.length; col++) {
+					const slice = bogeyData[col];
+					const y = slice ? slice.points[band] : null;
+
+					if (y == null) {
+						hasPrev = false;
+						continue;
+					}
+
+					const x = 20 + col * timeSliceWidth;
+					// Ring seam: col holds the oldest surviving data and col-1 holds the
+					// newest write — never connect across that jump in time.
+					const seamBreak = col === colCursor;
+
+					if (!hasPrev || seamBreak) {
+						project(x, y);
+						sinceLastStamp = 0;
+					} else {
+						const dx = x - prevX;
+						const dy = y - prevPtY;
+						const segLen = Math.sqrt(dx * dx + dy * dy);
+						let travelled = 0;
+						while (segLen - travelled >= STAMP_SPACING - sinceLastStamp) {
+							travelled += STAMP_SPACING - sinceLastStamp;
+							const t = travelled / segLen;
+							project(prevX + dx * t, prevPtY + dy * t);
+							sinceLastStamp = 0;
+						}
+						sinceLastStamp += segLen - travelled;
+					}
+
+					hasPrev = true;
+					prevX = x;
+					prevPtY = y;
+				}
+			}
+		}
+	};
 }
