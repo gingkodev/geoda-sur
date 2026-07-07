@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="/favicon.ico">
+  <title>CARDINAL SUR — Formación</title>
+</head>
+<body class="min-h-screen" style="background:#F9F9F9">
+  <div id="nav" style="visibility:hidden" class="fixed right-10 top-1/2 -translate-y-1/2 z-[1000] max-md:static max-md:translate-y-0 max-md:top-0 max-md:right-0 max-md:w-full max-md:bg-cream max-md:z-50"></div>
+
+  <a href="/" id="compass" style="visibility:hidden" class="fixed top-8 right-12 w-[80px] h-[80px] z-[1000] max-md:hidden">
+    <img src="/logo-cardinal.webp" alt="Cardinal Sur" class="w-full h-full" />
+  </a>
+
+  <main style="visibility:hidden" class="px-24 max-lg:px-10 max-md:px-4 py-24 max-md:py-6 max-w-[1600px]">
+    <div class="max-w-3xl lg:pr-0 pr-0">
+      <h1 id="formacion-title" class="text-xl tracking-widest uppercase font-bold mb-8">Formación</h1>
+      <p id="formacion-intro" class="text-xs uppercase leading-relaxed tracking-wide text-justify"></p>
+    </div>
+    <div id="formacion-grid" class="grid grid-cols-4 max-lg:grid-cols-2 max-md:grid-cols-1 gap-6 mt-20 max-md:mt-10 lg:pr-40"></div>
+  </main>
+
+  <div class="fixed bottom-5 right-10 text-[10px] tracking-wider z-[1000] pointer-events-none opacity-70 max-md:hidden">34&deg;36'13.5" S, 58&deg;22'53.7" O</div>
+
+  <script type="module" src="/src/formacion/main.ts"></script>
+</body>
+</html>

@@ -11,6 +11,7 @@ import blogRouter from "./routes/blog.js";
 import uploadsRouter from "./routes/uploads.js";
 import feedRouter from "./routes/feed.js";
 import contactRouter from "./routes/contact.js";
+import formacionRouter from "./routes/formacion.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -46,13 +47,14 @@ app.use("/api/blog", blogRouter);
 app.use("/api/uploads", uploadsRouter);
 app.use("/api/feed", feedRouter);
 app.use("/api/contact", contactRouter);
+app.use("/api/formacion", formacionRouter);
 
 // Production: serve Vite-built frontend from dist/client
 const clientDir = path.join(__dirname, "..", "dist", "client");
 app.use(express.static(clientDir));
 
 // Explicit routes for MPA pages
-const pages = ["proyectos", "blog", "contacto", "servicios"];
+const pages = ["proyectos", "blog", "contacto", "servicios", "formacion"];
 for (const page of pages) {
   app.get(`/${page}`, (_req, res) => {
     res.sendFile(path.join(clientDir, `${page}.html`));

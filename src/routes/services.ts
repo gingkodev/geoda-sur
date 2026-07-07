@@ -9,6 +9,15 @@ const router = Router();
 
 const I18N_FIELDS = ["name", "description"];
 
+async function fetchServiceImages(serviceId: number | string) {
+  const [rows] = await pool.query<RowDataPacket[]>(
+    `SELECT id, img_url, mobile_img_url, caption, sort_order
+     FROM service_images WHERE service_id = ? ORDER BY sort_order, id`,
+    [serviceId]
+  );
+  return rows;
+}
+
 // GET /api/services
 router.get("/", async (req, res) => {
   try {
@@ -49,6 +58,8 @@ router.get("/by-slug/:slug", async (req, res) => {
       [service.id]
     );
 
+    service.images = await fetchServiceImages(service.id);
+
     resolveRow(service, lang, I18N_FIELDS);
     resolveRows(projects, lang, ["name", "writeup"]);
 
@@ -72,6 +83,8 @@ router.get("/:id", async (req, res) => {
       [req.params.id]
     );
     if (!rows.length) return res.status(404).json({ error: "Not found" });
+
+    rows[0].images = await fetchServiceImages(rows[0].id);
 
     resolveRow(rows[0], lang, I18N_FIELDS);
 
@@ -115,6 +128,44 @@ router.put("/:id", requireAuth, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to update service" });
+  }
+});
+
+// POST /api/services/:id/images
+router.post("/:id/images", requireAuth, async (req, res) => {
+  try {
+    const { img_url, mobile_img_url, caption, sort_order } = req.body;
+    if (!img_url) return res.status(400).json({ error: "img_url is required" });
+
+    const [services] = await pool.query<RowDataPacket[]>(
+      `SELECT id FROM services WHERE id = ? AND is_deleted = 0`,
+      [req.params.id]
+    );
+    if (!services.length) return res.status(404).json({ error: "Not found" });
+
+    const [result] = await pool.query<ResultSetHeader>(
+      `INSERT INTO service_images (service_id, img_url, mobile_img_url, caption, sort_order) VALUES (?, ?, ?, ?, ?)`,
+      [req.params.id, img_url, mobile_img_url ?? null, caption ?? null, sort_order ?? 0]
+    );
+    res.status(201).json({ id: result.insertId });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to add image" });
+  }
+});
+
+// DELETE /api/services/:id/images/:imageId
+router.delete("/:id/images/:imageId", requireAuth, async (req, res) => {
+  try {
+    const [result] = await pool.query<ResultSetHeader>(
+      `DELETE FROM service_images WHERE id = ? AND service_id = ?`,
+      [req.params.imageId, req.params.id]
+    );
+    if (!result.affectedRows) return res.status(404).json({ error: "Not found" });
+    res.json({ deleted: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to delete image" });
   }
 });
 

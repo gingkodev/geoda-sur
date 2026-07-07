@@ -57,6 +57,40 @@ CREATE TABLE projects_services (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
+-- SERVICE IMAGES (per-service gallery)
+-- --------------------------------------------------------
+CREATE TABLE service_images (
+    id             INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    service_id     INT UNSIGNED NOT NULL,
+    img_url        VARCHAR(512) NOT NULL,
+    mobile_img_url VARCHAR(512) NULL,
+    caption        VARCHAR(255) NULL,
+    sort_order     INT NOT NULL DEFAULT 0,
+    date_created   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_si_service FOREIGN KEY (service_id)
+        REFERENCES services (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+-- FORMACION (singleton page + image grid)
+-- --------------------------------------------------------
+CREATE TABLE formacion_page (
+    id           TINYINT UNSIGNED PRIMARY KEY,
+    intro        TEXT NOT NULL,
+    intro_en     TEXT NULL,
+    date_updated TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE formacion_images (
+    id             INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    img_url        VARCHAR(512) NOT NULL,
+    mobile_img_url VARCHAR(512) NULL,
+    sort_order     INT NOT NULL DEFAULT 0,
+    date_created   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
 -- BLOG
 -- --------------------------------------------------------
 CREATE TABLE blog (

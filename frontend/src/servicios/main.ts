@@ -1,9 +1,8 @@
 import "../shared/styles.css";
 import { initCursor } from "../shared/cursor";
 import { initNav, initMobileNav } from "../shared/nav";
-import { getServices, getServiceBySlug, type Project, type Service } from "../shared/api";
-import { codes, getRandomHex, isDark } from "../shared/colors";
-import { t } from "../shared/i18n";
+import { getServices, getServiceBySlug, type Project, type Service, type ServiceImage } from "../shared/api";
+import { t, currentLang, switchLang } from "../shared/i18n";
 
 // p5.js globals (index backdrop)
 declare const createCanvas: any;
@@ -17,25 +16,16 @@ declare const translate: any;
 declare const rotate: any;
 declare const stroke: any;
 declare const strokeWeight: any;
-declare const noStroke: any;
-declare const fill: any;
 declare const noFill: any;
 declare const ellipse: any;
 declare const line: any;
 declare const rect: any;
 declare const arc: any;
 declare const drawingContext: CanvasRenderingContext2D;
-declare const width: number;
-declare const height: number;
 declare const OPEN: any;
 
 initCursor();
 const isMobile = window.innerWidth < 768;
-if (isMobile) {
-	initMobileNav(document.getElementById("nav"));
-} else {
-	initNav(document.getElementById("nav"));
-}
 
 const mainEl = document.getElementById("services-main")!;
 
@@ -48,16 +38,27 @@ function slugify(name: string): string {
 		.replace(/(^-|-$)/g, "");
 }
 
-function truncate(str: string, max: number): string {
-	return str.length <= max ? str : str.substring(0, max).trimEnd() + "…";
-}
-
 const segments = location.pathname.split("/").filter(Boolean);
 const detailSlug = segments[0] === "servicios" && segments[1] ? decodeURIComponent(segments[1]) : null;
 
 if (detailSlug) {
+	// Detail pages get a service-switcher nav instead of the general site
+	// menu — needs the services list, so it's wired up separately from the
+	// general initNav/initMobileNav path used by the index below.
+	const navEl = document.getElementById("nav");
+	getServices()
+		.then((services) => renderDetailNav(navEl, detailSlug, services))
+		.catch((err) => {
+			console.error("Nav services fetch failed:", err);
+			renderDetailNav(navEl, detailSlug, []); // still show brand + back + lang toggle
+		});
 	renderDetail(detailSlug);
 } else {
+	if (isMobile) {
+		initMobileNav(document.getElementById("nav"));
+	} else {
+		initNav(document.getElementById("nav"));
+	}
 	renderIndex();
 }
 
@@ -95,76 +96,210 @@ function renderIndex() {
 		});
 }
 
-function renderDetail(slug: string) {
-	const pageBg = getRandomHex(codes);
-	// Guardrail against unreadable text on random backgrounds: dark bg → light text, light bg → dark text.
-	const textColor = isDark(pageBg) ? "#F9F9F9" : "#000000";
+// --- Detail-page nav: a service switcher, not the general site menu -------
+// nav.ts's initNav/initMobileNav only know how to render the general
+// Proyectos/Blog/etc. links, so the detail nav is built from scratch here.
+// Markup mirrors nav.ts closely (brand link, lang toggle, active-state
+// convention) so it reads as the same nav, just with different contents.
 
-	mainEl.innerHTML = `
-		<div class="max-w-5xl">
-			<a href="/servicios" class="inline-flex items-center gap-2 text-xs md:text-sm tracking-widest uppercase no-underline mb-10 opacity-60 hover:opacity-100 transition-opacity" style="color:${textColor}">
-				← ${t("nav.services")}
-			</a>
-			<h1 id="service-title" class="text-3xl md:text-5xl lg:text-7xl uppercase font-medium tracking-tight leading-[0.95] mb-6 md:mb-8" style="color:${textColor}"></h1>
-			<h2 id="service-description" class="text-base md:text-lg lg:text-2xl uppercase font-medium tracking-tight leading-tight max-w-3xl mt-10 md:mt-12 mb-14 md:mb-20"></h2>
-			<div id="service-projects-label" class="text-xs md:text-sm tracking-widest uppercase mb-5 hidden opacity-55">${t("services.related")}</div>
-			<div id="service-projects" class="flex flex-col items-start gap-1"></div>
+const LANG_BTN_BASE = "lang-btn px-1.5 py-0.5";
+const LANG_ACTIVE = "bg-ink text-cream";
+const LANG_INACTIVE = "text-ink";
+
+function langToggleHTML(): string {
+	const esClass = currentLang === "es" ? LANG_ACTIVE : LANG_INACTIVE;
+	const enClass = currentLang === "en" ? LANG_ACTIVE : LANG_INACTIVE;
+	return `
+		<div class="flex gap-0 mt-6 text-[10px] tracking-wider uppercase">
+			<button data-switch-lang="es" class="${LANG_BTN_BASE} ${esClass}">ES</button>
+			<span class="text-ink/50 px-0.5">/</span>
+			<button data-switch-lang="en" class="${LANG_BTN_BASE} ${enClass}">EN</button>
 		</div>
 	`;
+}
 
-	const applyCut = () => {
-		const titleEl = document.getElementById("service-title");
-		const descEl = document.getElementById("service-description");
-		if (!titleEl || !descEl) return;
-		const titleBottom = titleEl.getBoundingClientRect().bottom + window.scrollY;
-		const descTop = descEl.getBoundingClientRect().top + window.scrollY;
-		const cutY = (titleBottom + descTop) / 2;
-		document.body.style.background = `linear-gradient(to bottom, ${pageBg} ${cutY}px, #F9F9F9 ${cutY}px)`;
-	};
+function bindLangButtons(container: HTMLElement) {
+	container.querySelectorAll<HTMLButtonElement>(".lang-btn").forEach((btn) => {
+		btn.addEventListener("click", () => {
+			const lang = btn.dataset.switchLang as "es" | "en";
+			if (lang !== currentLang) switchLang(lang);
+		});
+	});
+}
+
+function revealCompass() {
+	const compass = document.getElementById("compass");
+	if (compass) compass.style.visibility = "";
+}
+
+// Same external-vs-internal rule as the index list: a service with a
+// link_url points off-site instead of to its own /servicios/<slug> page.
+function serviceHref(s: Service): string {
+	return s.link_url ? s.link_url : `/servicios/${slugify(s.name)}`;
+}
+
+function serviceNavLinks(currentSlug: string, services: Service[], activeClass: string, inactiveClass: string): string {
+	return services
+		.map((s) => {
+			const slug = slugify(s.name);
+			const active = slug === currentSlug;
+			const external = s.link_url ? ` target="_blank" rel="noopener noreferrer"` : "";
+			return `<a href="${serviceHref(s)}"${external} class="${active ? activeClass : inactiveClass}">.${s.name}.</a>`;
+		})
+		.join("\n");
+}
+
+function renderDetailNav(container: HTMLElement | null, currentSlug: string, services: Service[]) {
+	if (!container) return;
+	const backLabel = t("services.back");
+
+	if (isMobile) {
+		const esClass = currentLang === "es" ? LANG_ACTIVE : LANG_INACTIVE;
+		const enClass = currentLang === "en" ? LANG_ACTIVE : LANG_INACTIVE;
+
+		container.innerHTML = `
+			<div class="flex items-center justify-between px-4 py-3">
+				<a href="/" class="text-sm tracking-widest uppercase font-medium no-underline text-ink">Cardinal Sur</a>
+				<div class="flex items-center gap-3">
+					<div class="flex gap-0 text-[10px] tracking-wider uppercase">
+						<button data-switch-lang="es" class="${LANG_BTN_BASE} ${esClass}">ES</button>
+						<span class="text-ink/50 px-0.5">/</span>
+						<button data-switch-lang="en" class="${LANG_BTN_BASE} ${enClass}">EN</button>
+					</div>
+					<button id="hamburger" class="text-ink text-lg leading-none cursor-auto min-w-[44px] min-h-[44px] flex items-center justify-center">&#9776;</button>
+				</div>
+			</div>
+			<nav id="mobile-menu" class="hidden flex-col gap-2 px-4 pb-4">
+				<a href="/servicios" class="text-xs tracking-wider uppercase py-1 no-underline text-ink block pb-2 mb-1 border-b border-ink/20">${backLabel}</a>
+				${serviceNavLinks(
+					currentSlug,
+					services,
+					"text-xs tracking-wider uppercase py-1 no-underline bg-ink text-cream",
+					"text-xs tracking-wider uppercase py-1 no-underline text-ink"
+				)}
+			</nav>
+		`;
+
+		document.getElementById("hamburger")!.addEventListener("click", () => {
+			const menu = document.getElementById("mobile-menu")!;
+			menu.classList.toggle("hidden");
+			menu.classList.toggle("flex");
+		});
+	} else {
+		container.innerHTML = `
+			<div class="text-sm tracking-widest uppercase font-medium">
+				<a href="/" class="nav-link px-1 py-0.5 -ml-1 no-underline text-ink">Cardinal Sur</a>
+			</div>
+			<nav class="flex flex-col gap-2 mt-6 max-w-[200px]">
+				<a href="/servicios" class="nav-link text-xs tracking-wider uppercase px-1 py-0.5 -ml-1 no-underline text-ink block pb-2 mb-1 border-b border-ink/20">${backLabel}</a>
+				${serviceNavLinks(
+					currentSlug,
+					services,
+					"nav-link text-xs tracking-wider uppercase px-1 py-0.5 -ml-1 no-underline bg-ink text-cream",
+					"nav-link text-xs tracking-wider uppercase px-1 py-0.5 -ml-1 no-underline text-ink"
+				)}
+			</nav>
+			${langToggleHTML()}
+		`;
+	}
+
+	bindLangButtons(container);
+	container.style.visibility = "";
+	revealCompass();
+}
+
+function renderDetail(slug: string) {
+	// Detail pages are a plain document — no random color wash, no p5 backdrop.
+	// The shell's body is overflow-hidden on desktop for the index's pinned,
+	// no-scroll design; detail content can run taller than one viewport, so it
+	// needs to actually be able to scroll.
+	document.body.classList.remove("overflow-hidden");
+	document.body.classList.add("overflow-y-auto");
+
+	mainEl.className =
+		"w-full max-w-6xl mx-auto px-6 md:pl-12 md:pr-48 lg:pr-56 pt-24 pb-20 max-md:pt-10 max-md:pb-12 max-md:px-4";
+	mainEl.innerHTML = `
+		<div id="service-images" class="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-5 mb-12 md:mb-16"></div>
+		<div class="flex flex-col lg:flex-row gap-10 lg:gap-16 xl:gap-20">
+			<div class="flex-1">
+				<h1 id="service-title" class="text-xl md:text-2xl lg:text-3xl uppercase font-medium tracking-tight leading-tight mb-5 md:mb-6"></h1>
+				<div id="service-description" class="text-[11px] md:text-xs uppercase leading-[1.8] tracking-wide md:text-justify"></div>
+			</div>
+			<div class="lg:w-48 xl:w-56 shrink-0">
+				<div class="text-xs md:text-sm tracking-widest uppercase mb-4 opacity-55">${t("services.clients")}</div>
+				<div id="service-clients" class="text-[10px] uppercase tracking-wider leading-relaxed"></div>
+			</div>
+		</div>
+	`;
 
 	getServiceBySlug(slug)
 		.then(({ service, projects }) => {
 			document.getElementById("service-title")!.textContent = service.name.toUpperCase();
-			renderProjectGrid(service, projects);
+			document.getElementById("service-description")!.innerHTML = service.description;
+			renderServiceImages(service.images ?? []);
+			renderClients(projects);
 			mainEl.style.display = "";
-			requestAnimationFrame(applyCut);
-			window.addEventListener("resize", applyCut);
 		})
 		.catch((err) => {
 			console.error("Service detail fetch failed:", err);
-			mainEl.innerHTML = `
-				<div class="max-w-3xl">
-					<a href="/servicios" class="inline-flex items-center gap-2 text-xs md:text-sm tracking-widest uppercase no-underline mb-8 opacity-60 hover:opacity-100 transition-opacity">← ${t("nav.services")}</a>
-					<p class="text-sm opacity-60">Servicio no encontrado.</p>
-				</div>
-			`;
+			mainEl.innerHTML = `<p class="text-sm opacity-60">${t("services.not_found")}</p>`;
 			mainEl.style.display = "";
 		});
 }
 
-function renderProjectGrid(service: Service, projects: Project[]) {
-	const grid = document.getElementById("service-projects")!;
-	const description = document.getElementById("service-description")!;
-	const label = document.getElementById("service-projects-label")!;
-
-	description.innerHTML = service.description;
-
-	if (!projects.length) {
-		grid.innerHTML = `<p class="text-xs text-muted">Aún no hay proyectos vinculados a este servicio.</p>`;
+// Top image row — 1 image stretches full width, 2+ sit side by side and wrap
+// in pairs. Degrades to nothing (no empty gap) when the service has none.
+function renderServiceImages(images: ServiceImage[]) {
+	const wrap = document.getElementById("service-images");
+	if (!wrap) return;
+	if (!images.length) {
+		wrap.remove();
 		return;
 	}
 
-	label.classList.remove("hidden");
+	const single = images.length === 1;
+	wrap.innerHTML = images
+		.map((img) => {
+			const caption = img.caption
+				? `<span class="absolute top-2 left-2 bg-ink text-cream text-[9px] md:text-[10px] uppercase tracking-wider px-1.5 py-0.5">${img.caption}</span>`
+				: "";
+			const mobileSource = img.mobile_img_url
+				? `<source media="(max-width: 767px)" srcset="${img.mobile_img_url}">`
+				: "";
+			return `
+				<div class="relative overflow-hidden aspect-[4/3] bg-ink/5${single ? " sm:col-span-2" : ""}">
+					<picture>
+						${mobileSource}
+						<img src="${img.img_url}" alt="" loading="lazy" class="w-full h-full object-cover block" />
+					</picture>
+					${caption}
+				</div>
+			`;
+		})
+		.join("");
+}
 
-	// Just the project titles — no cards, no fill.
-	for (const p of projects) {
-		const pslug = slugify(p.name);
-		const link = document.createElement("a");
-		link.href = `/proyectos#${pslug}`;
-		link.className = "service-link inline-block px-1.5 py-0.5 no-underline text-ink hover:bg-ink hover:text-cream transition-colors duration-150 text-sm uppercase font-medium tracking-tight leading-tight";
-		link.textContent = p.name.toUpperCase();
-		grid.appendChild(link);
+// Right column — linked project names as one wrapping "A | B | C" text block,
+// still clickable (to /proyectos#slug) even though it no longer reads as a
+// card grid.
+function renderClients(projects: Project[]) {
+	const container = document.getElementById("service-clients");
+	if (!container) return;
+
+	if (!projects.length) {
+		container.innerHTML = `<p class="normal-case tracking-normal opacity-45">${
+			t("services.no_clients")
+		}</p>`;
+		return;
 	}
+
+	container.innerHTML = projects
+		.map((p, i) => {
+			const pslug = slugify(p.name);
+			const sep = i < projects.length - 1 ? ` <span class="opacity-40">|</span> ` : "";
+			return `<a href="/proyectos#${pslug}" class="no-underline text-ink hover:opacity-55 transition-opacity">${p.name}</a>${sep}`;
+		})
+		.join("");
 }
 
 // ---------------------------------------------------------------------------
@@ -313,7 +448,7 @@ function generateBackdropShapes() {
 	}
 
 	// Force exactly 3–5 large dashed circles regardless of mix sampling
-	const largeCount = 3 + Math.floor(Math.random() * 3);
+	const largeCount = 1 + Math.floor(Math.random() * 3);
 	let placed = 0;
 	for (const s of backdropShapes) {
 		if (s.type === "large-dashed-circle") {

@@ -89,6 +89,7 @@
       <button class="tab text-xs tracking-wider uppercase px-4 py-3 border-r border-ink tab-active" data-tab="projects">Proyectos</button>
       <button class="tab text-xs tracking-wider uppercase px-4 py-3 border-r border-ink" data-tab="services">Servicios</button>
       <button class="tab text-xs tracking-wider uppercase px-4 py-3 border-r border-ink" data-tab="blog">Blog</button>
+      <button class="tab text-xs tracking-wider uppercase px-4 py-3 border-r border-ink" data-tab="formacion">Formación</button>
     </nav>
 
     <!-- Content -->
@@ -118,6 +119,36 @@
           <button class="btn-new text-xs tracking-wider uppercase border border-ink px-3 py-1 hover:bg-ink hover:text-paper transition-colors" data-entity="blog">+ Nuevo</button>
         </div>
         <div id="list-blog" class="space-y-2"></div>
+      </section>
+
+      <!-- Formación panel (singleton page) -->
+      <section id="panel-formacion" class="panel hidden">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-xs tracking-widest uppercase">Formación</h2>
+        </div>
+        <div class="max-w-2xl space-y-6">
+          <div>
+            <label class="text-[10px] tracking-wider uppercase text-neutral-500 block mb-1">Texto de introducción</label>
+            <div class="flex gap-0 mb-1">
+              <button type="button" class="lang-tab lang-tab-active" data-formacion-lang="es">ES</button>
+              <button type="button" class="lang-tab lang-tab-inactive" data-formacion-lang="en">EN</button>
+            </div>
+            <textarea id="formacion-intro-es" rows="7"
+              class="w-full bg-transparent border border-ink px-3 py-2 text-xs tracking-wide"></textarea>
+            <textarea id="formacion-intro-en" rows="7" placeholder="English translation"
+              class="w-full bg-transparent border border-ink px-3 py-2 text-xs tracking-wide hidden"></textarea>
+            <button id="formacion-save"
+              class="mt-2 text-xs tracking-wider uppercase border border-ink px-4 py-2 hover:bg-ink hover:text-paper transition-colors">Guardar texto</button>
+          </div>
+          <div>
+            <label class="text-[10px] tracking-wider uppercase text-neutral-500 block mb-1">Imágenes</label>
+            <div id="formacion-images" class="flex flex-wrap gap-2 mb-2"></div>
+            <input type="file" id="formacion-upload" accept="image/*"
+              class="w-full bg-transparent border border-ink px-3 py-2 text-xs tracking-wide file:mr-3 file:border-0 file:bg-ink file:text-paper file:px-2 file:py-1 file:text-[10px] file:uppercase file:tracking-wider file:cursor-pointer">
+            <div class="text-[10px] text-neutral-400 mt-1">Máx. 25 MB · JPG, PNG, WebP, GIF · se agrega al subir</div>
+            <div id="formacion-upload-status" class="upload-status text-neutral-500"></div>
+          </div>
+        </div>
       </section>
     </main>
   </div>
@@ -253,6 +284,7 @@ const schemas = {
     { key: 'name', label: 'Nombre', type: 'text', i18n: true },
     { key: 'description', label: 'Descripción', type: 'richtext', i18n: true },
     { key: 'link_url', label: 'Enlace externo (PDF) — opcional', type: 'text' },
+    { key: 'images', label: 'Imágenes', type: 'images' },
   ],
   blog: [
     { key: 'title', label: 'Título', type: 'text', i18n: true },
@@ -264,6 +296,7 @@ const schemas = {
 };
 
 async function loadTab(entity) {
+  if (entity === 'formacion') return loadFormacion();
   const res = await apiFetch('/' + entity);
   const json = await res.json();
   const items = Array.isArray(json) ? json : json.data;
@@ -354,6 +387,24 @@ async function openModal(entity, id) {
       return `<div data-field="${f.key}"${hidden ? ' class="hidden"' : ''}>
         <label class="text-[10px] tracking-wider uppercase text-neutral-500 block mb-1">${f.label}</label>
         <div id="quill-${f.key}"></div>
+      </div>`;
+    }
+    if (f.type === 'images') {
+      if (!id) {
+        return `<div data-field="${f.key}">
+          <label class="text-[10px] tracking-wider uppercase text-neutral-500 block mb-1">${f.label}</label>
+          <p class="text-[10px] text-neutral-400">Guardá primero para poder agregar imágenes.</p>
+        </div>`;
+      }
+      return `<div data-field="${f.key}">
+        <label class="text-[10px] tracking-wider uppercase text-neutral-500 block mb-1">${f.label}</label>
+        <div id="entity-images-list" class="flex flex-wrap gap-2 mb-2"></div>
+        <input type="text" id="entity-image-caption" placeholder="Epígrafe (opcional, ej: JUANA AGUIRRE ~)"
+          class="w-full bg-transparent border border-ink px-3 py-2 text-xs tracking-wide mb-1 placeholder:text-neutral-400">
+        <input type="file" id="entity-image-file" accept="image/*"
+          class="w-full bg-transparent border border-ink px-3 py-2 text-xs tracking-wide file:mr-3 file:border-0 file:bg-ink file:text-paper file:px-2 file:py-1 file:text-[10px] file:uppercase file:tracking-wider file:cursor-pointer">
+        <div class="text-[10px] text-neutral-400 mt-1">Máx. 25 MB · JPG, PNG, WebP, GIF · se agrega al subir</div>
+        <div id="entity-image-status" class="upload-status text-neutral-500"></div>
       </div>`;
     }
     if (f.type === 'select') {
@@ -529,7 +580,91 @@ async function openModal(entity, id) {
     toggle(); // set initial state
   });
 
+  // Entity images manager (immediate add/delete against /:entity/:id/images)
+  if (id && schema.some(f => f.type === 'images')) {
+    renderEntityImages(data.images ?? []);
+    document.getElementById('entity-image-file').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const statusEl = document.getElementById('entity-image-status');
+      const uploaded = await uploadImageFile(file, statusEl);
+      e.target.value = '';
+      if (!uploaded) return;
+      const captionEl = document.getElementById('entity-image-caption');
+      const caption = captionEl.value.trim() || null;
+      await apiFetch(`/${modalEntity}/${modalId}/images`, {
+        method: 'POST',
+        body: JSON.stringify({ img_url: uploaded.url, mobile_img_url: uploaded.mobileUrl, caption }),
+      });
+      captionEl.value = '';
+      await refreshEntityImages();
+      flash('imagen agregada');
+    });
+  }
+
   document.getElementById('modal').classList.remove('hidden');
+}
+
+// --- Shared image upload (25 MB, returns {url, mobileUrl} or null) ---
+async function uploadImageFile(file, statusEl) {
+  if (file.size > 25 * 1024 * 1024) {
+    const actualMb = (file.size / 1024 / 1024).toFixed(1);
+    statusEl.innerHTML = `<span class="text-red-600">Archivo demasiado grande (${actualMb} MB). Máximo: 25 MB</span>`;
+    return null;
+  }
+  statusEl.innerHTML = '<span class="text-neutral-400">Subiendo...</span>';
+  const formData = new FormData();
+  formData.append('file', file);
+  try {
+    const res = await fetch('/api/uploads/image', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
+      body: formData,
+    });
+    if (!res.ok) {
+      let msg = 'Error al subir';
+      try {
+        const body = await res.json();
+        if (body.error) msg = body.error;
+      } catch {}
+      throw new Error(msg);
+    }
+    statusEl.innerHTML = '';
+    return await res.json();
+  } catch (err) {
+    statusEl.innerHTML = `<span class="text-red-600">${esc(err.message || 'Error al subir')}</span>`;
+    return null;
+  }
+}
+
+function renderEntityImages(images) {
+  const el = document.getElementById('entity-images-list');
+  if (!el) return;
+  if (!images.length) {
+    el.innerHTML = '<p class="text-xs text-neutral-400">Sin imágenes</p>';
+    return;
+  }
+  el.innerHTML = images.map(im => `
+    <div class="border border-neutral-300 p-1 flex flex-col items-center gap-1 w-24">
+      <img src="${esc(im.img_url)}" class="h-20 w-full object-cover">
+      ${im.caption ? `<span class="text-[9px] text-neutral-500 truncate w-full text-center">${esc(im.caption)}</span>` : ''}
+      <button class="text-[9px] tracking-wider uppercase text-red-600 hover:bg-red-600 hover:text-paper px-1 transition-colors"
+        onclick="deleteEntityImage(${im.id})">Borrar</button>
+    </div>
+  `).join('');
+}
+
+async function refreshEntityImages() {
+  const res = await apiFetch(`/${modalEntity}/${modalId}`);
+  const data = await res.json();
+  renderEntityImages(data.images ?? []);
+}
+
+async function deleteEntityImage(imageId) {
+  if (!confirm('¿Eliminar esta imagen?')) return;
+  await apiFetch(`/${modalEntity}/${modalId}/images/${imageId}`, { method: 'DELETE' });
+  await refreshEntityImages();
+  flash('imagen eliminada');
 }
 
 document.getElementById('modal-cancel').addEventListener('click', closeModal);
@@ -546,6 +681,7 @@ document.getElementById('modal-save').addEventListener('click', async () => {
   const schema = schemas[modalEntity];
   const body = {};
   schema.forEach(f => {
+    if (f.type === 'images') return; // managed via /:id/images endpoints, not part of the entity body
     if (f.type === 'richtext') {
       const q = quillInstances[f.key];
       const html = q.root.innerHTML;
@@ -615,6 +751,72 @@ async function deleteItem(entity, id) {
   loadTab(entity);
   flash(`${entityLabels[entity].singular} eliminado`);
 }
+
+// --- Formación (singleton page) ---
+async function loadFormacion() {
+  const res = await apiFetch('/formacion');
+  const data = await res.json();
+  document.getElementById('formacion-intro-es').value = data.intro ?? '';
+  document.getElementById('formacion-intro-en').value = data.intro_en ?? '';
+  renderFormacionImages(data.images ?? []);
+}
+
+function renderFormacionImages(images) {
+  const el = document.getElementById('formacion-images');
+  if (!images.length) {
+    el.innerHTML = '<p class="text-xs text-neutral-400">Sin imágenes</p>';
+    return;
+  }
+  el.innerHTML = images.map(im => `
+    <div class="border border-neutral-300 p-1 flex flex-col items-center gap-1 w-24">
+      <img src="${esc(im.img_url)}" class="h-20 w-full object-cover">
+      <button class="text-[9px] tracking-wider uppercase text-red-600 hover:bg-red-600 hover:text-paper px-1 transition-colors"
+        onclick="deleteFormacionImage(${im.id})">Borrar</button>
+    </div>
+  `).join('');
+}
+
+async function deleteFormacionImage(id) {
+  if (!confirm('¿Eliminar esta imagen?')) return;
+  await apiFetch(`/formacion/images/${id}`, { method: 'DELETE' });
+  await loadFormacion();
+  flash('imagen eliminada');
+}
+
+document.getElementById('formacion-save').addEventListener('click', async () => {
+  const intro = document.getElementById('formacion-intro-es').value.trim();
+  const intro_en = document.getElementById('formacion-intro-en').value.trim() || null;
+  if (!intro) { flash('El texto ES no puede estar vacío', 'err'); return; }
+  await apiFetch('/formacion', { method: 'PUT', body: JSON.stringify({ intro, intro_en }) });
+  flash('texto actualizado');
+});
+
+document.querySelectorAll('[data-formacion-lang]').forEach(tab => {
+  tab.addEventListener('click', () => {
+    const lang = tab.dataset.formacionLang;
+    document.querySelectorAll('[data-formacion-lang]').forEach(t2 => {
+      t2.classList.toggle('lang-tab-active', t2 === tab);
+      t2.classList.toggle('lang-tab-inactive', t2 !== tab);
+    });
+    document.getElementById('formacion-intro-es').classList.toggle('hidden', lang !== 'es');
+    document.getElementById('formacion-intro-en').classList.toggle('hidden', lang !== 'en');
+  });
+});
+
+document.getElementById('formacion-upload').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const statusEl = document.getElementById('formacion-upload-status');
+  const uploaded = await uploadImageFile(file, statusEl);
+  e.target.value = '';
+  if (!uploaded) return;
+  await apiFetch('/formacion/images', {
+    method: 'POST',
+    body: JSON.stringify({ img_url: uploaded.url, mobile_img_url: uploaded.mobileUrl }),
+  });
+  await loadFormacion();
+  flash('imagen agregada');
+});
 
 // --- Init ---
 checkSession();

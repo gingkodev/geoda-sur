@@ -44,5 +44,7 @@ export function resolveRows(
 
 export function cacheHeaders(lang: Lang | null): Record<string, string> {
   if (lang === null) return {};
-  return { "Cache-Control": "public, max-age=300" };
+  // no-cache = always revalidate (Express ETags turn unchanged responses into 304s),
+  // so CMS edits show up on the next page load instead of after a 5-minute TTL
+  return { "Cache-Control": "no-cache" };
 }

@@ -10,6 +10,7 @@ async function seed() {
     { name: "Producción Musical", name_en: "Music Production", description: "Producción integral desde la preproducción hasta el master final. Grabación, mezcla y masterización en nuestro estudio o de forma remota.", description_en: "Full-cycle production from pre-production to final master. Recording, mixing, and mastering in our studio or remotely." },
     { name: "Diseño Sonoro", name_en: "Sound Design", description: "Diseño de sonido para cine, publicidad, instalaciones y experiencias interactivas. Creamos paisajes sonoros únicos que potencian la narrativa visual.", description_en: "Sound design for film, advertising, installations, and interactive experiences. We create unique soundscapes that enhance the visual narrative." },
     { name: "Formación", name_en: "Training", description: "Talleres y clases particulares de producción musical, síntesis, mezcla y tecnología musical. Programas personalizados para todos los niveles.", description_en: "Workshops and private lessons in music production, synthesis, mixing, and music technology. Customized programs for all levels." },
+    { name: "Rental", name_en: "Rental", description: "Alquiler de equipos de audio, instrumentos y backline. Consultá el catálogo completo.", description_en: "Audio equipment, instrument, and backline rental. Check the full catalog." },
   ];
 
   for (const s of services) {

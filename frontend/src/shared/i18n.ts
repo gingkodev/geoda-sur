@@ -26,6 +26,10 @@ const strings: Record<string, Record<Lang, string>> = {
   "services.title": { es: "Servicios", en: "Services" },
   "services.empty": { es: "No hay servicios aún", en: "No services yet" },
   "services.related": { es: "Proyectos relacionados", en: "Related projects" },
+  "services.clients": { es: "Clientes", en: "Clients" },
+  "services.back": { es: "<< Servicios", en: "<< Services" },
+  "services.not_found": { es: "Servicio no encontrado.", en: "Service not found." },
+  "services.no_clients": { es: "Aún no hay clientes vinculados.", en: "No linked clients yet." },
 
   // Projects
   "projects.empty": { es: "No hay proyectos aún", en: "No projects yet" },

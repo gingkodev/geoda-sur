@@ -28,6 +28,7 @@ export default defineConfig({
         blog: resolve(__dirname, "frontend/blog.html"),
         contacto: resolve(__dirname, "frontend/contacto.html"),
         servicios: resolve(__dirname, "frontend/servicios.html"),
+        formacion: resolve(__dirname, "frontend/formacion.html"),
       },
     },
   },
