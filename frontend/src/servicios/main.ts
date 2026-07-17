@@ -219,16 +219,12 @@ function renderDetail(slug: string) {
 	mainEl.className =
 		"w-full max-w-6xl mx-auto px-6 md:pl-12 md:pr-48 lg:pr-56 pt-24 pb-20 max-md:pt-10 max-md:pb-12 max-md:px-4";
 	mainEl.innerHTML = `
-		<div id="service-images" class="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-5 mb-12 md:mb-16"></div>
-		<div class="flex flex-col lg:flex-row gap-10 lg:gap-16 xl:gap-20">
-			<div class="flex-1">
-				<h1 id="service-title" class="text-xl md:text-2xl lg:text-3xl uppercase font-medium tracking-tight leading-tight mb-5 md:mb-6"></h1>
-				<div id="service-description" class="text-[11px] md:text-xs uppercase leading-[1.8] tracking-wide md:text-justify"></div>
-			</div>
-			<div class="lg:w-48 xl:w-56 shrink-0">
-				<div class="text-xs md:text-sm tracking-widest uppercase mb-4 opacity-55">${t("services.clients")}</div>
-				<div id="service-clients" class="text-[10px] uppercase tracking-wider leading-relaxed"></div>
-			</div>
+		<div id="service-images" class="flex flex-col gap-8 mb-12 md:mb-16"></div>
+		<div class="flex flex-col lg:grid lg:grid-cols-[1fr_12rem] xl:grid-cols-[1fr_14rem] lg:gap-x-16 xl:gap-x-20 lg:items-baseline">
+			<h1 id="service-title" class="max-lg:order-1 text-xl md:text-2xl lg:text-3xl uppercase font-medium tracking-tight leading-tight mb-5 md:mb-6"></h1>
+			<div class="max-lg:order-3 text-xs md:text-sm tracking-widest uppercase mb-5 md:mb-6 opacity-55">${t("services.clients")}</div>
+			<div id="service-description" class="max-lg:order-2 max-lg:mb-10 text-[11px] md:text-xs uppercase leading-[1.8] tracking-wide md:text-justify"></div>
+			<div id="service-clients" class="max-lg:order-4 text-[10px] uppercase tracking-wider leading-[1.8]"></div>
 		</div>
 	`;
 
@@ -247,8 +243,23 @@ function renderDetail(slug: string) {
 		});
 }
 
-// Top image row — 1 image stretches full width, 2+ sit side by side and wrap
-// in pairs. Degrades to nothing (no empty gap) when the service has none.
+// Top image row. On mobile it's a simple stacked column at natural size
+// (unchanged). On desktop it's a loose, non-overlapping scatter above the
+// text block — randomized per load and rejection-sampled so boxes never
+// touch, same technique in spirit as the cartographic landing's item-card
+// placement (frontend/src/home/main.ts: random candidate + collision check),
+// just simpler since there are at most 3 images. Placement is biased into
+// three loose zones (upper-left / upper-right / center-low) so the result
+// still reads as composed rather than uniformly random. Images always render
+// at their natural aspect ratio (no cropping). Degrades to nothing (no empty
+// gap) when the service has no images.
+const SCATTER_GAP = 20; // min px between two images' boxes
+const SCATTER_ZONES = [
+	{ xMin: 0, xMax: 0.42, yMin: 0, yMax: 0.3, minW: 300, maxW: 420, maxW3: 360 }, // upper-left, largest
+	{ xMin: 0.55, xMax: 1, yMin: 0, yMax: 0.25, minW: 200, maxW: 300, maxW3: 260 }, // upper-right, smaller & wide
+	{ xMin: 0.22, xMax: 0.68, yMin: 0.38, yMax: 0.8, minW: 240, maxW: 340, maxW3: 300 }, // center, lower
+];
+
 function renderServiceImages(images: ServiceImage[]) {
 	const wrap = document.getElementById("service-images");
 	if (!wrap) return;
@@ -257,26 +268,133 @@ function renderServiceImages(images: ServiceImage[]) {
 		return;
 	}
 
-	const single = images.length === 1;
+	if (isMobile) {
+		wrap.innerHTML = images
+			.map((img) => {
+				const caption = img.caption
+					? `<span class="absolute top-2 left-2 bg-ink text-cream text-[9px] uppercase tracking-wider px-1.5 py-0.5">${img.caption}</span>`
+					: "";
+				const mobileSource = img.mobile_img_url
+					? `<source media="(max-width: 767px)" srcset="${img.mobile_img_url}">`
+					: "";
+				return `
+					<div class="relative w-full">
+						<picture>
+							${mobileSource}
+							<img src="${img.img_url}" alt="" loading="lazy" class="w-full h-auto block" />
+						</picture>
+						${caption}
+					</div>
+				`;
+			})
+			.join("");
+		return;
+	}
+
+	renderScatteredImages(wrap, images);
+}
+
+// Resolves once an <img>'s natural size is known (already cached, or via
+// load/error), so the scatter layout below can size boxes off the real
+// aspect ratio instead of guessing.
+function whenImageReady(img: HTMLImageElement): Promise<{ w: number; h: number }> {
+	return new Promise((resolve) => {
+		const done = () => resolve({ w: img.naturalWidth || 4, h: img.naturalHeight || 3 });
+		if (img.complete && img.naturalWidth) return done();
+		img.addEventListener("load", done, { once: true });
+		img.addEventListener("error", () => resolve({ w: 4, h: 3 }), { once: true });
+	});
+}
+
+interface ScatterBox {
+	x: number;
+	y: number;
+	w: number;
+	h: number;
+}
+
+function boxesOverlap(a: ScatterBox, b: ScatterBox, gap: number): boolean {
+	return !(a.x + a.w + gap < b.x || b.x + b.w + gap < a.x || a.y + a.h + gap < b.y || b.y + b.h + gap < a.y);
+}
+
+// Random offset within [fracMin, fracMax] of `total`, clamped so the box
+// (of `size`) never runs past the container edge.
+function randomSpan(fracMin: number, fracMax: number, total: number, size: number): number {
+	const maxOffset = Math.max(0, total - size);
+	const lo = Math.min(fracMin * total, maxOffset);
+	const hi = Math.min(fracMax * total, maxOffset);
+	return lo + Math.random() * Math.max(0, hi - lo);
+}
+
+// Rejection-samples a non-overlapping spot: try inside the image's zone
+// first, fall back to anywhere in the canvas, and worst case (vanishingly
+// unlikely with only 3 boxes) just place it — no physics, no iteration.
+function findScatterSpot(
+	containerW: number,
+	containerH: number,
+	w: number,
+	h: number,
+	zone: (typeof SCATTER_ZONES)[number],
+	placed: ScatterBox[]
+): { x: number; y: number } {
+	const tryZone = (xMin: number, xMax: number, yMin: number, yMax: number) => {
+		for (let attempt = 0; attempt < 30; attempt++) {
+			const x = randomSpan(xMin, xMax, containerW, w);
+			const y = randomSpan(yMin, yMax, containerH, h);
+			if (!placed.some((p) => boxesOverlap({ x, y, w, h }, p, SCATTER_GAP))) return { x, y };
+		}
+		return null;
+	};
+
+	return (
+		tryZone(zone.xMin, zone.xMax, zone.yMin, zone.yMax) ||
+		tryZone(0, 1, 0, 1) || // zone too tight — fall back to the whole canvas
+		{ x: 0, y: 0 } // last resort
+	);
+}
+
+function renderScatteredImages(wrap: HTMLElement, images: ServiceImage[]) {
+	wrap.className = "relative w-full mb-12 md:mb-16";
+	const containerH = Math.max(360, Math.min(Math.round(window.innerHeight * 0.58), 620));
+	wrap.style.height = `${containerH}px`;
+
 	wrap.innerHTML = images
 		.map((img) => {
 			const caption = img.caption
 				? `<span class="absolute top-2 left-2 bg-ink text-cream text-[9px] md:text-[10px] uppercase tracking-wider px-1.5 py-0.5">${img.caption}</span>`
 				: "";
-			const mobileSource = img.mobile_img_url
-				? `<source media="(max-width: 767px)" srcset="${img.mobile_img_url}">`
-				: "";
 			return `
-				<div class="relative overflow-hidden aspect-[4/3] bg-ink/5${single ? " sm:col-span-2" : ""}">
-					<picture>
-						${mobileSource}
-						<img src="${img.img_url}" alt="" loading="lazy" class="w-full h-full object-cover block" />
-					</picture>
+				<div class="scatter-img absolute opacity-0 transition-opacity duration-500">
+					<img src="${img.img_url}" alt="" loading="lazy" class="w-full h-auto block" />
 					${caption}
 				</div>
 			`;
 		})
 		.join("");
+
+	const boxes = Array.from(wrap.querySelectorAll<HTMLElement>(".scatter-img"));
+	const ready = boxes.map((box) => whenImageReady(box.querySelector("img")!));
+
+	Promise.all(ready).then((sizes) => {
+		const containerW = wrap.clientWidth;
+		const placed: ScatterBox[] = [];
+
+		boxes.forEach((box, i) => {
+			const ratio = sizes[i].w / sizes[i].h || 4 / 3;
+			const zone = SCATTER_ZONES[i % SCATTER_ZONES.length];
+			const maxW = images.length >= 3 ? zone.maxW3 : zone.maxW;
+			const targetW = Math.min(zone.minW + Math.random() * (maxW - zone.minW), containerW - SCATTER_GAP);
+			const targetH = targetW / ratio;
+
+			const { x, y } = findScatterSpot(containerW, containerH, targetW, targetH, zone, placed);
+			placed.push({ x, y, w: targetW, h: targetH });
+
+			box.style.left = `${x}px`;
+			box.style.top = `${y}px`;
+			box.style.width = `${targetW}px`;
+			box.classList.remove("opacity-0");
+		});
+	});
 }
 
 // Right column — linked project names as one wrapping "A | B | C" text block,

@@ -8,6 +8,7 @@ import { slugify } from "../slugify.js";
 const router = Router();
 
 const I18N_FIELDS = ["name", "description"];
+const MAX_SERVICE_IMAGES = 3;
 
 async function fetchServiceImages(serviceId: number | string) {
   const [rows] = await pool.query<RowDataPacket[]>(
@@ -142,6 +143,17 @@ router.post("/:id/images", requireAuth, async (req, res) => {
       [req.params.id]
     );
     if (!services.length) return res.status(404).json({ error: "Not found" });
+
+    const [countRows] = await pool.query<RowDataPacket[]>(
+      `SELECT COUNT(*) AS count FROM service_images WHERE service_id = ?`,
+      [req.params.id]
+    );
+    const imageCount = Number(countRows[0].count);
+    if (imageCount >= MAX_SERVICE_IMAGES) {
+      return res.status(400).json({
+        error: `Este servicio ya tiene el máximo de ${MAX_SERVICE_IMAGES} imágenes.`,
+      });
+    }
 
     const [result] = await pool.query<ResultSetHeader>(
       `INSERT INTO service_images (service_id, img_url, mobile_img_url, caption, sort_order) VALUES (?, ?, ?, ?, ?)`,

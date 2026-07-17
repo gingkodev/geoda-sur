@@ -284,7 +284,7 @@ const schemas = {
     { key: 'name', label: 'Nombre', type: 'text', i18n: true },
     { key: 'description', label: 'Descripción', type: 'richtext', i18n: true },
     { key: 'link_url', label: 'Enlace externo (PDF) — opcional', type: 'text' },
-    { key: 'images', label: 'Imágenes', type: 'images' },
+    { key: 'images', label: 'Imágenes', type: 'images', maxImages: 3 },
   ],
   blog: [
     { key: 'title', label: 'Título', type: 'text', i18n: true },
@@ -399,10 +399,11 @@ async function openModal(entity, id) {
       return `<div data-field="${f.key}">
         <label class="text-[10px] tracking-wider uppercase text-neutral-500 block mb-1">${f.label}</label>
         <div id="entity-images-list" class="flex flex-wrap gap-2 mb-2"></div>
+        <p id="entity-image-cap-note" class="hidden text-[10px] text-neutral-500 mb-1"></p>
         <input type="text" id="entity-image-caption" placeholder="Epígrafe (opcional, ej: JUANA AGUIRRE ~)"
-          class="w-full bg-transparent border border-ink px-3 py-2 text-xs tracking-wide mb-1 placeholder:text-neutral-400">
+          class="w-full bg-transparent border border-ink px-3 py-2 text-xs tracking-wide mb-1 placeholder:text-neutral-400 disabled:opacity-40 disabled:cursor-not-allowed">
         <input type="file" id="entity-image-file" accept="image/*"
-          class="w-full bg-transparent border border-ink px-3 py-2 text-xs tracking-wide file:mr-3 file:border-0 file:bg-ink file:text-paper file:px-2 file:py-1 file:text-[10px] file:uppercase file:tracking-wider file:cursor-pointer">
+          class="w-full bg-transparent border border-ink px-3 py-2 text-xs tracking-wide file:mr-3 file:border-0 file:bg-ink file:text-paper file:px-2 file:py-1 file:text-[10px] file:uppercase file:tracking-wider file:cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
         <div class="text-[10px] text-neutral-400 mt-1">Máx. 25 MB · JPG, PNG, WebP, GIF · se agrega al subir</div>
         <div id="entity-image-status" class="upload-status text-neutral-500"></div>
       </div>`;
@@ -592,13 +593,18 @@ async function openModal(entity, id) {
       if (!uploaded) return;
       const captionEl = document.getElementById('entity-image-caption');
       const caption = captionEl.value.trim() || null;
-      await apiFetch(`/${modalEntity}/${modalId}/images`, {
-        method: 'POST',
-        body: JSON.stringify({ img_url: uploaded.url, mobile_img_url: uploaded.mobileUrl, caption }),
-      });
-      captionEl.value = '';
-      await refreshEntityImages();
-      flash('imagen agregada');
+      try {
+        await apiFetch(`/${modalEntity}/${modalId}/images`, {
+          method: 'POST',
+          body: JSON.stringify({ img_url: uploaded.url, mobile_img_url: uploaded.mobileUrl, caption }),
+        });
+        captionEl.value = '';
+        flash('imagen agregada');
+      } finally {
+        // Re-syncs the cap state (disabled inputs, "máx." note) even on
+        // failure — e.g. another tab already hit the cap in the meantime.
+        await refreshEntityImages();
+      }
     });
   }
 
@@ -640,18 +646,34 @@ async function uploadImageFile(file, statusEl) {
 function renderEntityImages(images) {
   const el = document.getElementById('entity-images-list');
   if (!el) return;
-  if (!images.length) {
-    el.innerHTML = '<p class="text-xs text-neutral-400">Sin imágenes</p>';
-    return;
-  }
-  el.innerHTML = images.map(im => `
-    <div class="border border-neutral-300 p-1 flex flex-col items-center gap-1 w-24">
-      <img src="${esc(im.img_url)}" class="h-20 w-full object-cover">
-      ${im.caption ? `<span class="text-[9px] text-neutral-500 truncate w-full text-center">${esc(im.caption)}</span>` : ''}
-      <button class="text-[9px] tracking-wider uppercase text-red-600 hover:bg-red-600 hover:text-paper px-1 transition-colors"
-        onclick="deleteEntityImage(${im.id})">Borrar</button>
-    </div>
-  `).join('');
+  el.innerHTML = images.length
+    ? images.map(im => `
+      <div class="border border-neutral-300 p-1 flex flex-col items-center gap-1 w-24">
+        <img src="${esc(im.img_url)}" class="h-20 w-full object-cover">
+        ${im.caption ? `<span class="text-[9px] text-neutral-500 truncate w-full text-center">${esc(im.caption)}</span>` : ''}
+        <button class="text-[9px] tracking-wider uppercase text-red-600 hover:bg-red-600 hover:text-paper px-1 transition-colors"
+          onclick="deleteEntityImage(${im.id})">Borrar</button>
+      </div>
+    `).join('')
+    : '<p class="text-xs text-neutral-400">Sin imágenes</p>';
+  updateEntityImageCap(images.length);
+}
+
+// Caps are declared per-schema (schemas.services images field has
+// maxImages: 3) rather than hardcoded to an entity name, so this stays a
+// no-op for any images-manager entity that doesn't set one.
+function updateEntityImageCap(count) {
+  const field = schemas[modalEntity]?.find(f => f.type === 'images');
+  const max = field?.maxImages;
+  const captionEl = document.getElementById('entity-image-caption');
+  const fileEl = document.getElementById('entity-image-file');
+  const noteEl = document.getElementById('entity-image-cap-note');
+  if (!captionEl || !fileEl || !noteEl) return;
+  const atCap = !!max && count >= max;
+  captionEl.disabled = atCap;
+  fileEl.disabled = atCap;
+  if (max) noteEl.textContent = `Máx. ${max} imágenes`;
+  noteEl.classList.toggle('hidden', !atCap);
 }
 
 async function refreshEntityImages() {

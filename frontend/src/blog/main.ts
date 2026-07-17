@@ -57,7 +57,6 @@ interface Doodle {
 	y: number;
 	imgIndex: number;
 	size: number;
-	rotation: number;
 	phaseX: number; // idle-drift phase, per axis so the path loops instead of tracing a line
 	phaseY: number;
 	ox: number; // push displacement from rest (world units)
@@ -298,7 +297,6 @@ function generateDoodles() {
 			y: pt.y - 900,
 			imgIndex: Math.floor(Math.random() * DOODLE_IMAGE_URLS.length),
 			size: DOODLE_SIZE_MIN + Math.random() * (DOODLE_SIZE_MAX - DOODLE_SIZE_MIN),
-			rotation: Math.random() * Math.PI * 2,
 			phaseX: Math.random() * Math.PI * 2,
 			phaseY: Math.random() * Math.PI * 2,
 			ox: 0,
@@ -367,7 +365,6 @@ function drawDoodles() {
 
 		push();
 		translate(sx, sy);
-		rotate(d.rotation);
 		image(img, -d.size / 2, -d.size / 2, d.size, d.size);
 		pop();
 	}
