@@ -3,25 +3,41 @@ import type { RowDataPacket, ResultSetHeader } from "mysql2";
 import pool from "../db.js";
 import { requireAuth } from "../middleware/auth.js";
 import { getLang, resolveRows, resolveRow, cacheHeaders } from "../lang.js";
-import { slugify } from "../slugify.js";
+import { uniqueSlug } from "../slugs.js";
+import { handleRouteError } from "../route-errors.js";
+import {
+  requiredVarchar,
+  optionalVarchar,
+  optionalText,
+  oneOf,
+  parsePagination,
+  optionalQueryString,
+} from "../validate.js";
 
 const router = Router();
 
 const I18N_FIELDS = ["title", "writeup"];
 
+// Mirrors the CMS `type` dropdown (admin/index.html). The column is a plain
+// VARCHAR(20), so without this any string would be accepted and the public
+// frontend — which switches rendering on these three — would silently skip it.
+const BLOG_TYPES = ["post", "audio", "note"] as const;
+
 // GET /api/blog — supports ?type=post|audio|note filter, pagination via ?offset=&limit=
 router.get("/", async (req, res) => {
   try {
     const lang = getLang(req);
-    const offset = Math.max(0, parseInt(req.query.offset as string) || 0);
-    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 20));
+    const { offset, limit } = parsePagination(req.query.offset, req.query.limit);
 
     let where = `WHERE is_deleted = 0`;
     const params: (string | number)[] = [];
 
-    if (req.query.type) {
+    // `?type[]=a&type[]=b` parses to an array, which mysql2 expands into a
+    // comma list and broke the single-placeholder query. Only a scalar filters.
+    const typeFilter = optionalQueryString(req.query.type);
+    if (typeFilter) {
       where += ` AND type = ?`;
-      params.push(req.query.type as string);
+      params.push(typeFilter);
     }
 
     const [[{ total }]] = await pool.query<RowDataPacket[]>(
@@ -72,33 +88,47 @@ router.get("/:id", async (req, res) => {
 // POST /api/blog
 router.post("/", requireAuth, async (req, res) => {
   try {
-    const { title, title_en, category, type, writeup, writeup_en, audio_url } = req.body;
-    const slug = slugify(title);
+    const title = requiredVarchar(req.body.title, "title", 255);
+    const title_en = optionalVarchar(req.body.title_en, "title_en", 255);
+    const category = requiredVarchar(req.body.category, "category", 100);
+    const type = oneOf(req.body.type, "type", BLOG_TYPES);
+    const writeup = optionalText(req.body.writeup, "writeup");
+    const writeup_en = optionalText(req.body.writeup_en, "writeup_en");
+    const audio_url = optionalVarchar(req.body.audio_url, "audio_url", 512);
+
+    const slug = await uniqueSlug("blog", title);
+
     const [result] = await pool.query<ResultSetHeader>(
       `INSERT INTO blog (title, title_en, category, type, slug, writeup, writeup_en, audio_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [title, title_en ?? null, category, type, slug, writeup ?? null, writeup_en ?? null, audio_url ?? null]
+      [title, title_en, category, type, slug, writeup, writeup_en, audio_url]
     );
     res.status(201).json({ id: result.insertId });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to create blog entry" });
+    handleRouteError(err, res, "Failed to create blog entry");
   }
 });
 
 // PUT /api/blog/:id
 router.put("/:id", requireAuth, async (req, res) => {
   try {
-    const { title, title_en, category, type, writeup, writeup_en, audio_url } = req.body;
-    const slug = slugify(title);
+    const title = requiredVarchar(req.body.title, "title", 255);
+    const title_en = optionalVarchar(req.body.title_en, "title_en", 255);
+    const category = requiredVarchar(req.body.category, "category", 100);
+    const type = oneOf(req.body.type, "type", BLOG_TYPES);
+    const writeup = optionalText(req.body.writeup, "writeup");
+    const writeup_en = optionalText(req.body.writeup_en, "writeup_en");
+    const audio_url = optionalVarchar(req.body.audio_url, "audio_url", 512);
+
+    const slug = await uniqueSlug("blog", title, String(req.params.id));
+
     const [result] = await pool.query<ResultSetHeader>(
       `UPDATE blog SET title = ?, title_en = ?, category = ?, type = ?, slug = ?, writeup = ?, writeup_en = ?, audio_url = ? WHERE id = ? AND is_deleted = 0`,
-      [title, title_en ?? null, category, type, slug, writeup ?? null, writeup_en ?? null, audio_url ?? null, req.params.id]
+      [title, title_en, category, type, slug, writeup, writeup_en, audio_url, req.params.id]
     );
     if (!result.affectedRows) return res.status(404).json({ error: "Not found" });
     res.json({ updated: true });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to update blog entry" });
+    handleRouteError(err, res, "Failed to update blog entry");
   }
 });
 

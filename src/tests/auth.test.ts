@@ -110,7 +110,7 @@ describe("Auth Routes", () => {
       expect(res.body.name).toBe("Test User");
     });
 
-    it("returns 404 for deleted user with valid token", async () => {
+    it("rejects a deleted user's still-valid token with 401", async () => {
       const user = await seedUser();
       const token = getAuthToken(user.id, user.email);
       const { default: pool } = await import("../db.js");
@@ -118,7 +118,23 @@ describe("Auth Routes", () => {
       const res = await request(app)
         .get("/api/auth/me")
         .set("Authorization", `Bearer ${token}`);
-      expect(res.status).toBe(404);
+      // requireAuth re-checks the user on every request, so a revoked account
+      // is turned away at the middleware (401) rather than reaching the handler
+      // and reporting 404. Previously the signature alone was enough, which let
+      // a soft-deleted user keep writing for the token's remaining 7 days.
+      expect(res.status).toBe(401);
+    });
+
+    it("blocks a deleted user's token from writing", async () => {
+      const user = await seedUser();
+      const token = getAuthToken(user.id, user.email);
+      const { default: pool } = await import("../db.js");
+      await pool.query("UPDATE users SET is_deleted = 1 WHERE id = ?", [user.id]);
+      const res = await request(app)
+        .post("/api/services")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ name: "Should Not Exist", description: "d" });
+      expect(res.status).toBe(401);
     });
 
     it("rejects unauthenticated request", async () => {

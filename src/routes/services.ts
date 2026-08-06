@@ -4,6 +4,15 @@ import pool from "../db.js";
 import { requireAuth } from "../middleware/auth.js";
 import { getLang, resolveRows, resolveRow, cacheHeaders } from "../lang.js";
 import { slugify } from "../slugify.js";
+import { uniqueSlug } from "../slugs.js";
+import { handleRouteError } from "../route-errors.js";
+import {
+  requiredVarchar,
+  optionalVarchar,
+  requiredText,
+  optionalText,
+  optionalInt,
+} from "../validate.js";
 
 const router = Router();
 
@@ -102,67 +111,101 @@ router.get("/:id", async (req, res) => {
 // POST /api/services
 router.post("/", requireAuth, async (req, res) => {
   try {
-    const { name, name_en, description, description_en, link_url } = req.body;
-    const slug = slugify(name);
+    const name = requiredVarchar(req.body.name, "name", 255);
+    const name_en = optionalVarchar(req.body.name_en, "name_en", 255);
+    const description = requiredText(req.body.description, "description");
+    const description_en = optionalText(req.body.description_en, "description_en");
+    const link_url = optionalVarchar(req.body.link_url, "link_url", 512);
+
+    const slug = await uniqueSlug("services", name);
+
     const [result] = await pool.query<ResultSetHeader>(
       `INSERT INTO services (name, name_en, slug, description, description_en, link_url) VALUES (?, ?, ?, ?, ?, ?)`,
-      [name, name_en ?? null, slug, description, description_en ?? null, link_url ?? null]
+      [name, name_en, slug, description, description_en, link_url]
     );
     res.status(201).json({ id: result.insertId });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to create service" });
+    handleRouteError(err, res, "Failed to create service");
   }
 });
 
 // PUT /api/services/:id
 router.put("/:id", requireAuth, async (req, res) => {
   try {
-    const { name, name_en, description, description_en, link_url } = req.body;
-    const slug = slugify(name);
+    const name = requiredVarchar(req.body.name, "name", 255);
+    const name_en = optionalVarchar(req.body.name_en, "name_en", 255);
+    const description = requiredText(req.body.description, "description");
+    const description_en = optionalText(req.body.description_en, "description_en");
+    const link_url = optionalVarchar(req.body.link_url, "link_url", 512);
+
+    const slug = await uniqueSlug("services", name, String(req.params.id));
+
     const [result] = await pool.query<ResultSetHeader>(
       `UPDATE services SET name = ?, name_en = ?, slug = ?, description = ?, description_en = ?, link_url = ? WHERE id = ? AND is_deleted = 0`,
-      [name, name_en ?? null, slug, description, description_en ?? null, link_url ?? null, req.params.id]
+      [name, name_en, slug, description, description_en, link_url, req.params.id]
     );
     if (!result.affectedRows) return res.status(404).json({ error: "Not found" });
     res.json({ updated: true });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to update service" });
+    handleRouteError(err, res, "Failed to update service");
   }
 });
 
 // POST /api/services/:id/images
 router.post("/:id/images", requireAuth, async (req, res) => {
+  let img_url: string;
+  let mobile_img_url: string | null;
+  let caption: string | null;
+  let sort_order: number;
   try {
-    const { img_url, mobile_img_url, caption, sort_order } = req.body;
-    if (!img_url) return res.status(400).json({ error: "img_url is required" });
+    img_url = requiredVarchar(req.body.img_url, "img_url", 512);
+    mobile_img_url = optionalVarchar(req.body.mobile_img_url, "mobile_img_url", 512);
+    caption = optionalVarchar(req.body.caption, "caption", 255);
+    sort_order = optionalInt(req.body.sort_order, "sort_order", 0);
+  } catch (err) {
+    return handleRouteError(err, res, "Failed to add image");
+  }
 
-    const [services] = await pool.query<RowDataPacket[]>(
-      `SELECT id FROM services WHERE id = ? AND is_deleted = 0`,
+  // Counting then inserting on the pool let concurrent requests all observe the
+  // same pre-insert count and sail past the cap (10 parallel POSTs stored 7).
+  // Taking a row lock on the parent service serialises every image insert for
+  // that service, so the count is read under the same lock that guards the write.
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    const [services] = await conn.query<RowDataPacket[]>(
+      `SELECT id FROM services WHERE id = ? AND is_deleted = 0 FOR UPDATE`,
       [req.params.id]
     );
-    if (!services.length) return res.status(404).json({ error: "Not found" });
+    if (!services.length) {
+      await conn.rollback();
+      return res.status(404).json({ error: "Not found" });
+    }
 
-    const [countRows] = await pool.query<RowDataPacket[]>(
+    const [countRows] = await conn.query<RowDataPacket[]>(
       `SELECT COUNT(*) AS count FROM service_images WHERE service_id = ?`,
       [req.params.id]
     );
-    const imageCount = Number(countRows[0].count);
-    if (imageCount >= MAX_SERVICE_IMAGES) {
+    if (Number(countRows[0].count) >= MAX_SERVICE_IMAGES) {
+      await conn.rollback();
       return res.status(400).json({
         error: `Este servicio ya tiene el máximo de ${MAX_SERVICE_IMAGES} imágenes.`,
       });
     }
 
-    const [result] = await pool.query<ResultSetHeader>(
+    const [result] = await conn.query<ResultSetHeader>(
       `INSERT INTO service_images (service_id, img_url, mobile_img_url, caption, sort_order) VALUES (?, ?, ?, ?, ?)`,
-      [req.params.id, img_url, mobile_img_url ?? null, caption ?? null, sort_order ?? 0]
+      [req.params.id, img_url, mobile_img_url, caption, sort_order]
     );
+
+    await conn.commit();
     res.status(201).json({ id: result.insertId });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to add image" });
+    await conn.rollback().catch(() => {});
+    handleRouteError(err, res, "Failed to add image");
+  } finally {
+    conn.release();
   }
 });
 

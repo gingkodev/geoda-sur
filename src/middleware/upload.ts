@@ -32,6 +32,35 @@ const AUDIO_MIMES = [
 export const IMAGE_MAX_MB = 25;
 export const AUDIO_MAX_MB = 100;
 
+/**
+ * Stored extension per accepted audio MIME type.
+ *
+ * The extension used to come from `path.extname(req.file.originalname)`, i.e.
+ * straight from the client, while the MIME filter only checked the *declared*
+ * Content-Type. Uploading HTML as `audio/mpeg` with `filename=x.html` therefore
+ * wrote a .html file that express.static served back as text/html from the app
+ * origin. Deriving the extension from a server-side table removes the client's
+ * say in it entirely.
+ */
+const AUDIO_EXT_BY_MIME: Record<string, string> = {
+  "audio/mpeg": ".mp3",
+  "audio/mp3": ".mp3",
+  "audio/wav": ".wav",
+  "audio/ogg": ".ogg",
+  "audio/flac": ".flac",
+  "audio/aac": ".aac",
+  "audio/mp4": ".m4a",
+  "audio/x-m4a": ".m4a",
+};
+
+/**
+ * Ceiling on decoded image size. sharp's own default (~268 Mpx) stops the
+ * classic 30000x30000 bomb, but leaves a band beneath it: a 776 KB 16000x16000
+ * PNG passes the 25 MB byte cap and still drove ~185 MB of RSS, decoded twice.
+ * 40 Mpx comfortably covers any real photo (a 24 MP camera is ~24 Mpx).
+ */
+const MAX_INPUT_PIXELS = 40_000_000;
+
 const uploadImageMw = multer({
 	storage: multer.memoryStorage(),
 	limits: { fileSize: IMAGE_MAX_MB * 1024 * 1024 },
@@ -75,19 +104,21 @@ export async function processImage(
 ) {
 	if (!req.file) return res.status(400).json({ error: "No file provided" });
 
+	const filename = `${randomUUID()}.webp`;
+	const fullPath = path.join(IMAGES_DIR, filename);
+	const mobilePath = path.join(MOBILE_DIR, filename);
+
 	try {
-		const filename = `${randomUUID()}.webp`;
-		const fullPath = path.join(IMAGES_DIR, filename);
-		const mobilePath = path.join(MOBILE_DIR, filename);
+		const opts = { limitInputPixels: MAX_INPUT_PIXELS };
 
 		// desktop: max 1280px wide, WebP quality 80
-		await sharp(req.file.buffer)
+		await sharp(req.file.buffer, opts)
 			.resize({ width: 1280, withoutEnlargement: true })
 			.webp({ quality: 80 })
 			.toFile(fullPath);
 
 		// mobile: max 640px wide, WebP quality 75
-		await sharp(req.file.buffer)
+		await sharp(req.file.buffer, opts)
 			.resize({ width: 640, withoutEnlargement: true })
 			.webp({ quality: 75 })
 			.toFile(mobilePath);
@@ -98,8 +129,17 @@ export async function processImage(
 		};
 		next();
 	} catch (err) {
-		console.error("Image processing failed:", err);
-		res.status(500).json({ error: "Image processing failed" });
+		// The desktop variant may already be on disk when the mobile pass fails,
+		// which used to leave an orphan that nothing ever referenced or cleaned.
+		await Promise.all([
+			fs.rm(fullPath, { force: true }),
+			fs.rm(mobilePath, { force: true }),
+		]).catch(() => {});
+
+		// A corrupt, empty, or oversized-canvas file is bad input, not a server
+		// fault — it used to answer 500 and fill the logs with stack traces.
+		console.warn("Image processing rejected:", (err as Error).message);
+		res.status(400).json({ error: "No se pudo procesar la imagen" });
 	}
 }
 
@@ -111,7 +151,14 @@ export async function processAudio(
 	if (!req.file) return res.status(400).json({ error: "No file provided" });
 
 	try {
-		const ext = path.extname(req.file.originalname).toLowerCase() || ".mp3";
+		// Extension comes from the server-side table, never from originalname.
+		// The MIME was already checked against AUDIO_MIMES by the multer filter,
+		// so a missing entry here would mean the two lists drifted apart.
+		const ext = AUDIO_EXT_BY_MIME[req.file.mimetype];
+		if (!ext) {
+			return res.status(400).json({ error: "Unsupported audio type" });
+		}
+
 		const filename = `${randomUUID()}${ext}`;
 		const filePath = path.join(AUDIO_DIR, filename);
 
