@@ -1,15 +1,43 @@
 import { Router } from "express";
-import type { ResultSetHeader } from "mysql2";
+import type { ResultSetHeader, RowDataPacket } from "mysql2";
 import pool from "../db.js";
+import { requireAuth } from "../middleware/auth.js";
 import { handleRouteError } from "../route-errors.js";
 import {
   requiredVarchar,
   requiredText,
+  parsePagination,
   singleLine,
   multiLine,
 } from "../validate.js";
 
 const router = Router();
+
+// GET /api/contact — admin inbox, newest first. Auth-gated: these are private
+// messages from the public form, so unlike the other GET routes this one is
+// never anonymous. Paginated like /api/blog (same clamp rules).
+router.get("/", requireAuth, async (req, res) => {
+  try {
+    const { offset, limit } = parsePagination(req.query.offset, req.query.limit, 50);
+
+    const [[{ total }]] = await pool.query<RowDataPacket[]>(
+      `SELECT COUNT(*) AS total FROM contact_messages`
+    );
+
+    const [rows] = await pool.query<RowDataPacket[]>(
+      `SELECT id, name, email, message, date_created
+       FROM contact_messages
+       ORDER BY date_created DESC, id DESC
+       LIMIT ? OFFSET ?`,
+      [limit, offset]
+    );
+
+    res.json({ data: rows, total, limit, offset });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch contact messages" });
+  }
+});
 
 // POST /api/contact
 router.post("/", async (req, res) => {

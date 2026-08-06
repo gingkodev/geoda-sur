@@ -90,6 +90,7 @@
       <button class="tab text-xs tracking-wider uppercase px-4 py-3 border-r border-ink" data-tab="services">Servicios</button>
       <button class="tab text-xs tracking-wider uppercase px-4 py-3 border-r border-ink" data-tab="blog">Blog</button>
       <button class="tab text-xs tracking-wider uppercase px-4 py-3 border-r border-ink" data-tab="formacion">Formación</button>
+      <button class="tab text-xs tracking-wider uppercase px-4 py-3 border-r border-ink" data-tab="mensajes">Mensajes</button>
     </nav>
 
     <!-- Content -->
@@ -151,6 +152,20 @@
         </div>
       </section>
 
+      <!-- Mensajes panel (contact form inbox, read-only) -->
+      <section id="panel-mensajes" class="panel hidden">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-xs tracking-widest uppercase">Mensajes</h2>
+          <span id="mensajes-count" class="text-[10px] tracking-wider uppercase text-neutral-500"></span>
+        </div>
+        <div id="list-mensajes" class="space-y-2"></div>
+        <div class="flex justify-center mt-4">
+          <button id="mensajes-more"
+            class="hidden text-xs tracking-wider uppercase border border-ink px-4 py-2 hover:bg-ink hover:text-paper transition-colors">
+            Cargar más
+          </button>
+        </div>
+      </section>
     </main>
   </div>
 
@@ -298,6 +313,7 @@ const schemas = {
 
 async function loadTab(entity) {
   if (entity === 'formacion') return loadFormacion();
+  if (entity === 'mensajes') return loadMensajes();
   const res = await apiFetch('/' + entity);
   const json = await res.json();
   const items = Array.isArray(json) ? json : json.data;
@@ -847,6 +863,76 @@ document.getElementById('formacion-upload').addEventListener('change', async (e)
   await loadFormacion();
   flash('imagen agregada');
 });
+
+// --- Mensajes (contact form inbox, read-only) ---
+// Every field here comes from the public, unauthenticated contact form, so it
+// is fully attacker-controlled. Values are inserted with textContent rather
+// than interpolated into an innerHTML template: esc() escapes & < > but NOT
+// quotes, so it cannot safely guard an HTML attribute.
+const MENSAJES_PAGE = 50;
+let mensajesOffset = 0;
+
+async function loadMensajes(append = false) {
+  if (!append) mensajesOffset = 0;
+
+  const res = await apiFetch(`/contact?offset=${mensajesOffset}&limit=${MENSAJES_PAGE}`);
+  const { data, total } = await res.json();
+
+  const list = document.getElementById('list-mensajes');
+  const countEl = document.getElementById('mensajes-count');
+  const moreBtn = document.getElementById('mensajes-more');
+
+  if (!append) list.replaceChildren();
+  countEl.textContent = total === 1 ? '1 mensaje' : `${total} mensajes`;
+
+  if (!total) {
+    list.replaceChildren(Object.assign(document.createElement('p'), {
+      className: 'text-xs text-neutral-400',
+      textContent: 'Sin mensajes',
+    }));
+    moreBtn.classList.add('hidden');
+    return;
+  }
+
+  for (const m of data) list.appendChild(renderMensaje(m));
+
+  mensajesOffset += data.length;
+  moreBtn.classList.toggle('hidden', mensajesOffset >= total);
+}
+
+function renderMensaje(m) {
+  const wrap = document.createElement('div');
+  wrap.className = 'border border-neutral-300 px-3 py-2 space-y-1';
+
+  const head = document.createElement('div');
+  head.className = 'flex items-baseline justify-between gap-3';
+
+  const who = document.createElement('span');
+  who.className = 'text-xs';
+  who.textContent = m.name;
+
+  const when = document.createElement('span');
+  when.className = 'text-[10px] text-neutral-400 shrink-0';
+  when.textContent = new Date(m.date_created).toLocaleString('es-AR');
+
+  head.append(who, when);
+
+  // href is assigned as a DOM property with a hardcoded mailto: scheme, so a
+  // stored value can neither break out of markup nor smuggle javascript:.
+  const mail = document.createElement('a');
+  mail.className = 'text-[10px] text-neutral-500 hover:text-ink transition-colors block';
+  mail.textContent = m.email;
+  mail.href = 'mailto:' + m.email;
+
+  const body = document.createElement('p');
+  body.className = 'text-xs whitespace-pre-wrap break-words pt-1';
+  body.textContent = m.message;
+
+  wrap.append(head, mail, body);
+  return wrap;
+}
+
+document.getElementById('mensajes-more').addEventListener('click', () => loadMensajes(true));
 
 // --- Init ---
 checkSession();
