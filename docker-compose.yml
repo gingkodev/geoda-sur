@@ -1,13 +1,30 @@
+# Production by default.
+#
+# This file used to describe the development stack, with docker-compose.vps.yml
+# layered on top for production. That failed open: `docker compose up` with the
+# override forgotten built the dev target and bind-mounted the source, which is
+# exactly how the Vite dev server ended up being served to real visitors. The
+# defaults are now the production ones, and local development opts IN via
+# docker-compose.dev.yml:
+#
+#   production:   docker compose up -d --build
+#   development:  docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+#
+# Forgetting the override now yields production, which is harmless.
 services:
   app:
-    build: .
-    ports:
-      - "5173:5173"
+    build:
+      context: .
+      target: prod
     volumes:
-      - .:/app
-      - /app/node_modules
+      # Uploads are user content and must outlive the container. Note this is
+      # the ONLY mount: the source tree is deliberately not bind-mounted, since
+      # that would shadow the /app/dist built into the image.
       - ./public/uploads:/app/public/uploads
     environment:
+      # Belt-and-braces with the error handler in src/app.ts: Express's default
+      # finalhandler only omits err.stack from error responses when this is set.
+      NODE_ENV: production
       DB_HOST: db
       MYSQL_DATABASE: ${MYSQL_DATABASE}
       MYSQL_USER: ${MYSQL_USER}
@@ -16,11 +33,12 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    restart: unless-stopped
 
   db:
     image: mysql:8.4
-    ports:
-      - "127.0.0.1:3306:3306"
+    # No published port: the database is reachable only over the compose
+    # network. docker-compose.dev.yml opens 127.0.0.1:3306 for local tooling.
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE}
@@ -34,15 +52,19 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    restart: unless-stopped
 
   nginx:
     image: nginx:alpine
+    # Loopback only — the host's nginx terminates TLS and proxies here.
+    # Publishing on 0.0.0.0 would expose the app on :8080 bypassing TLS.
     ports:
-      - "8080:80"
+      - "127.0.0.1:8080:80"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
       - app
+    restart: unless-stopped
 
 volumes:
   db_data:

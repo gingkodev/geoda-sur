@@ -1,0 +1,32 @@
+# Local development overlay. Opt in explicitly:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+#
+# Everything here is a deliberate step DOWN from the production defaults in
+# docker-compose.yml — the dev image target, the source bind-mount, and the
+# published ports. None of it should ever reach a server.
+services:
+  app:
+    build:
+      # `npm run dev`: Vite dev server + tsx watch, source mounted over /app.
+      target: dev
+    volumes: !override
+      - .:/app
+      # Anonymous volume keeps the image's node_modules (built for linux)
+      # from being shadowed by the host's.
+      - /app/node_modules
+      - ./public/uploads:/app/public/uploads
+    ports:
+      - "5173:5173"
+    environment:
+      NODE_ENV: development
+    restart: "no"
+
+  db:
+    # Exposed for host-side tooling: `npm test`, `npm run migrate`, mysql client.
+    ports:
+      - "127.0.0.1:3306:3306"
+    restart: "no"
+
+  nginx:
+    restart: "no"

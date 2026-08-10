@@ -1,4 +1,26 @@
 node_modules
 .git
-*.md
 .env
+.env.prod
+.claude
+
+# Rebuilt inside the image by the `build` stage; copying the host's output in
+# would let a stale local build win over a fresh one.
+dist
+
+# User uploads live in a volume, not in the image.
+public/uploads
+
+# Raw source material and scratch files — none of it is served.
+random-imgs/*.ai
+random-imgs/*.zip
+pngs-inti-blogs
+pngs-inti-proyectos
+pngs blog.zip
+pngs proyectos.zip
+__MACOSX
+misc
+*.md
+notas-*.txt
+cardinal-notas-finales.txt
+database-scheme.txt

@@ -7,12 +7,15 @@
     "dev": "concurrently -n api,client -c blue,green \"npm run dev:api\" \"npm run dev:client\"",
     "dev:api": "tsx watch src/server.ts",
     "dev:client": "vite",
-    "build": "vite build",
+    "build": "npm run build:server && npm run build:client",
     "start": "node dist/server.js",
     "migrate": "tsx src/migrate.ts",
     "seed": "tsx src/seed.ts",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "test": "MYSQL_DATABASE=cardinal_test vitest run",
+    "test:watch": "MYSQL_DATABASE=cardinal_test vitest",
+    "prebuild": "rm -rf dist",
+    "build:server": "tsc -p tsconfig.build.json",
+    "build:client": "vite build"
   },
   "dependencies": {
     "@tailwindcss/postcss": "^4.2.1",
