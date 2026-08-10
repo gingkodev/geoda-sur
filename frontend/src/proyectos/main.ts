@@ -111,20 +111,13 @@ muteBtn.addEventListener("click", () => {
 
 		// If audio isn't playing yet, start it for the current project
 		if (audioEl.paused && activeProjectSlug && pendingProjects) {
-			const project = pendingProjects.find((p) => slugify(p.name) === activeProjectSlug);
+			const project = pendingProjects.find((p) => p.slug === activeProjectSlug);
 			if (project?.audio_url) {
 				startAudioFade(project.audio_url);
 			}
 		}
 	}
 });
-
-function slugify(name: string): string {
-	return name
-		.toLowerCase()
-		.replace(/[^a-z0-9]+/g, "-")
-		.replace(/(^-|-$)/g, "");
-}
 
 // --- Lang toggle for projects sidebar ---
 function addLangToggle() {
@@ -184,7 +177,7 @@ function render(projects: Project[], services: Service[]) {
 		const mobileListEl = document.getElementById("mobile-project-list");
 		if (mobileListEl) {
 			for (const project of projects) {
-				const slug = slugify(project.name);
+				const slug = project.slug;
 				const a = document.createElement("a");
 				a.href = `#${slug}`;
 				a.className =
@@ -207,7 +200,7 @@ function render(projects: Project[], services: Service[]) {
 		// Build project list (desktop sidebar only)
 		if (projectListEl) {
 			for (const project of projects) {
-				const slug = slugify(project.name);
+				const slug = project.slug;
 				const a = document.createElement("a");
 				a.href = `#${slug}`;
 				a.className =
@@ -222,7 +215,7 @@ function render(projects: Project[], services: Service[]) {
 	// Build project sections
 	for (let i = 0; i < projects.length; i++) {
 		const project = projects[i];
-		const slug = slugify(project.name);
+		const slug = project.slug;
 		const serviceNames = project.service_ids
 			.map((id) => serviceMap.get(id))
 			.filter(Boolean) as string[];
@@ -307,10 +300,45 @@ function render(projects: Project[], services: Service[]) {
 		container.appendChild(section);
 	}
 
-	// --- Scroll observer for active project ---
 	const sections = document.querySelectorAll<HTMLElement>(".project-section");
-	const slugs = projects.map((p) => slugify(p.name));
+	const slugs = projects.map((p) => p.slug);
 
+	// Reveal BEFORE any scrolling. #projects-container ships with an inline
+	// display:none (proyectos.html) so the empty shell never flashes, and a
+	// display:none element has no layout box — scrollIntoView() on a section
+	// inside it is a silent no-op. It neither throws nor scrolls, so the hash
+	// jump below "ran" and the container was then revealed at scrollTop 0,
+	// landing on the first project every time.
+	container.style.display = "";
+	const sidebarEl = document.getElementById("sidebar");
+	const mobileNavEl = document.getElementById("mobile-project-nav");
+	const muteEl = document.getElementById("mute-btn");
+	if (sidebarEl) sidebarEl.style.display = "";
+	if (mobileNavEl) mobileNavEl.style.display = "";
+	if (muteEl) muteEl.style.display = "";
+
+	// Hash scroll on load — instant so the user lands directly on the target.
+	//
+	// A hash that matches no section (stale bookmark, renamed project) still has
+	// to leave the page in a defined state. Otherwise the miss falls through both
+	// branches: setActiveProject never runs, so no project is highlighted and no
+	// audio or sketch is wired up.
+	const hashSlug = location.hash ? decodeURIComponent(location.hash.slice(1)) : null;
+	const hashTarget = hashSlug ? document.getElementById(hashSlug) : null;
+
+	if (hashSlug && hashTarget) {
+		hashTarget.scrollIntoView({ behavior: "instant" });
+		setActiveProject(hashSlug, projects);
+	} else if (projects.length) {
+		if (hashSlug) console.warn(`No project section for hash "${hashSlug}" — falling back to the first.`);
+		setActiveProject(slugs[0], projects);
+	}
+
+	// --- Scroll observer for active project ---
+	// Attached AFTER the hash jump on purpose. An observer's first callback is
+	// delivered asynchronously from when observe() is called, so registering it
+	// beforehand would queue an entry for whatever was on screen at scrollTop 0
+	// and overwrite the project we just selected.
 	const observer = new IntersectionObserver(
 		(entries) => {
 			for (const entry of entries) {
@@ -350,17 +378,6 @@ function render(projects: Project[], services: Service[]) {
 		}
 	});
 
-	// Hash scroll on load — instant so user lands directly on the target
-	if (location.hash) {
-		const target = document.getElementById(location.hash.slice(1));
-		if (target) {
-			target.scrollIntoView({ behavior: "instant" });
-			setActiveProject(location.hash.slice(1), projects);
-		}
-	} else if (projects.length) {
-		setActiveProject(slugs[0], projects);
-	}
-
 	// Hash click from sidebar
 	projectListEl?.addEventListener("click", (e) => {
 		const link = (e.target as HTMLElement).closest<HTMLAnchorElement>(".project-list-link");
@@ -370,14 +387,6 @@ function render(projects: Project[], services: Service[]) {
 		document.getElementById(slug)?.scrollIntoView({ behavior: "smooth" });
 		setActiveProject(slug, projects);
 	});
-
-	container.style.display = "";
-	const sidebar = document.getElementById("sidebar");
-	const mobileNav = document.getElementById("mobile-project-nav");
-	const muteEl = document.getElementById("mute-btn");
-	if (sidebar) sidebar.style.display = "";
-	if (mobileNav) mobileNav.style.display = "";
-	if (muteEl) muteEl.style.display = "";
 }
 
 // --- Active project + audio ---
@@ -401,7 +410,7 @@ function setActiveProject(slug: string, projects: Project[]) {
 	moveSketchTo(slug);
 
 	// Find project for audio
-	const project = projects.find((p) => slugify(p.name) === slug);
+	const project = projects.find((p) => p.slug === slug);
 	startAudioFade(project?.audio_url ?? null);
 }
 
