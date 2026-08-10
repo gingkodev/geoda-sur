@@ -3,7 +3,6 @@ import type { RowDataPacket, ResultSetHeader } from "mysql2";
 import pool from "../db.js";
 import { requireAuth } from "../middleware/auth.js";
 import { getLang, resolveRows, resolveRow, cacheHeaders } from "../lang.js";
-import { slugify } from "../slugify.js";
 import { uniqueSlug } from "../slugs.js";
 import { handleRouteError } from "../route-errors.js";
 import {
@@ -54,11 +53,19 @@ router.get("/by-slug/:slug", async (req, res) => {
   try {
     const lang = getLang(req);
 
+    // Look the slug up in the `slug` column rather than recomputing it from the
+    // name. The stored value is the one the UNIQUE index guards, the one POST/PUT
+    // allocate via uniqueSlug() (including its -2/-3 collision suffixes), and the
+    // one every link in the app is built from. Recomputing the slug from the name
+    // here silently disagreed with all three: a service whose slug had been
+    // suffixed, or whose stored slug predates the current slug rules, was
+    // unreachable and answered 404 on a link the app itself had emitted.
     const [services] = await pool.query<RowDataPacket[]>(
-      `SELECT * FROM services WHERE is_deleted = 0`
+      `SELECT * FROM services WHERE slug = ? AND is_deleted = 0`,
+      [req.params.slug]
     );
-    const service = services.find((s) => slugify(s.name) === req.params.slug);
-    if (!service) return res.status(404).json({ error: "Not found" });
+    if (!services.length) return res.status(404).json({ error: "Not found" });
+    const service = services[0];
 
     const [projects] = await pool.query<RowDataPacket[]>(
       `SELECT p.* FROM projects p

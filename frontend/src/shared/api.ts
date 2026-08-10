@@ -22,6 +22,11 @@ export interface FeedResponse {
 export interface Project {
 	id: number;
 	name: string;
+	// Allocated server-side by uniqueSlug() and stored in the `slug` column.
+	// Always use this for links and element ids — recomputing it from `name` in
+	// the client drifts from the stored value (collision suffixes, older slug
+	// rules) and silently breaks the anchor.
+	slug: string;
 	writeup: string;
 	img_url: string;
 	audio_url: string | null;
@@ -58,6 +63,7 @@ export interface ServiceImage {
 export interface Service {
 	id: number;
 	name: string;
+	slug: string;
 	description: string;
 	link_url: string | null;
 	date_created: string;

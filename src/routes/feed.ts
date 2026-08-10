@@ -5,7 +5,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import pool from "../db.js";
 import { getLang, cacheHeaders } from "../lang.js";
-import { slugify } from "../slugify.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const IMAGES_PATH = path.join(__dirname, "..", "..", "images.json");
@@ -51,11 +50,11 @@ router.get("/", async (req, res) => {
 			? "COALESCE(name_en, name)" : "name";
 
 		const [rows] = await pool.query<RowDataPacket[]>(
-			`(SELECT id, 'blog' AS type, ${titleBlog} AS title, date_created, slug, slug AS slug_source FROM blog WHERE is_deleted = 0)
+			`(SELECT id, 'blog' AS type, ${titleBlog} AS title, date_created, slug FROM blog WHERE is_deleted = 0)
        UNION ALL
-       (SELECT id, 'project' AS type, ${titleProject} AS title, date_created, slug, slug AS slug_source FROM projects WHERE is_deleted = 0)
+       (SELECT id, 'project' AS type, ${titleProject} AS title, date_created, slug FROM projects WHERE is_deleted = 0)
        UNION ALL
-       (SELECT id, 'service' AS type, ${titleService} AS title, date_created, slug, name AS slug_source FROM services WHERE is_deleted = 0)
+       (SELECT id, 'service' AS type, ${titleService} AS title, date_created, slug FROM services WHERE is_deleted = 0)
        ORDER BY date_created DESC LIMIT ? OFFSET ?`,
 			[limit, offset]
 		);
@@ -63,11 +62,16 @@ router.get("/", async (req, res) => {
 		const images = await loadImages();
 
 		const data = rows.map((row) => {
-			const isService = row.type === "service";
-			// Services use path-based routes resolved by runtime slugify(name).
-			// Blog/projects still use hash anchors against stored slug column.
-			const slug = isService ? slugify(row.slug_source) : row.slug;
-			const link = isService ? `/servicios/${slug}` : `/${row.type === "project" ? "proyectos" : "blog"}#${slug}`;
+			// Every link is built from the stored slug column. Services used to
+			// derive theirs from the name at request time instead, which disagreed
+			// with the value /api/services/by-slug looks up and with the ids the
+			// projects page gives its sections — the link resolved to nothing and
+			// the page silently stayed on its first item.
+			const slug = row.slug;
+			const link =
+				row.type === "service"
+					? `/servicios/${slug}`
+					: `/${row.type === "project" ? "proyectos" : "blog"}#${slug}`;
 			return {
 				id: row.id,
 				type: row.type,

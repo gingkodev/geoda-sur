@@ -29,15 +29,6 @@ const isMobile = window.innerWidth < 768;
 
 const mainEl = document.getElementById("services-main")!;
 
-function slugify(name: string): string {
-	return name
-		.toLowerCase()
-		.normalize("NFD")
-		.replace(/[̀-ͯ]/g, "")
-		.replace(/[^a-z0-9]+/g, "-")
-		.replace(/(^-|-$)/g, "");
-}
-
 const segments = location.pathname.split("/").filter(Boolean);
 const detailSlug = segments[0] === "servicios" && segments[1] ? decodeURIComponent(segments[1]) : null;
 
@@ -73,7 +64,7 @@ function renderIndex() {
 		.then((services) => {
 			const list = document.getElementById("services-index")!;
 			services.forEach((s) => {
-				const slug = slugify(s.name);
+				const slug = s.slug;
 				const external = s.link_url
 					? ` href="${s.link_url}" target="_blank" rel="noopener noreferrer"`
 					: ` href="/servicios/${slug}"`;
@@ -135,13 +126,13 @@ function revealCompass() {
 // Same external-vs-internal rule as the index list: a service with a
 // link_url points off-site instead of to its own /servicios/<slug> page.
 function serviceHref(s: Service): string {
-	return s.link_url ? s.link_url : `/servicios/${slugify(s.name)}`;
+	return s.link_url ? s.link_url : `/servicios/${s.slug}`;
 }
 
 function serviceNavLinks(currentSlug: string, services: Service[], activeClass: string, inactiveClass: string): string {
 	return services
 		.map((s) => {
-			const slug = slugify(s.name);
+			const slug = s.slug;
 			const active = slug === currentSlug;
 			const external = s.link_url ? ` target="_blank" rel="noopener noreferrer"` : "";
 			return `<a href="${serviceHref(s)}"${external} class="${active ? activeClass : inactiveClass}">.${s.name}.</a>`;
@@ -413,7 +404,7 @@ function renderClients(projects: Project[]) {
 
 	container.innerHTML = projects
 		.map((p, i) => {
-			const pslug = slugify(p.name);
+			const pslug = p.slug;
 			const sep = i < projects.length - 1 ? ` <span class="opacity-40">|</span> ` : "";
 			return `<a href="/proyectos#${pslug}" class="no-underline text-ink hover:opacity-55 transition-opacity">${p.name}</a>${sep}`;
 		})
