@@ -11,9 +11,11 @@ dist
 # User uploads live in a volume, not in the image.
 public/uploads
 
+# Served from a bind mount, not from the image — see docker-compose.yml.
+# Excluding it drops ~29MB from the build context.
+random-imgs
+
 # Raw source material and scratch files — none of it is served.
-random-imgs/*.ai
-random-imgs/*.zip
 pngs-inti-blogs
 pngs-inti-proyectos
 pngs blog.zip

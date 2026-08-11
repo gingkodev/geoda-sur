@@ -17,10 +17,17 @@ services:
       context: .
       target: prod
     volumes:
-      # Uploads are user content and must outlive the container. Note this is
-      # the ONLY mount: the source tree is deliberately not bind-mounted, since
-      # that would shadow the /app/dist built into the image.
+      # Uploads are user content and must outlive the container.
       - ./public/uploads:/app/public/uploads
+      # The /banco image bank. Mounted rather than baked into the image because
+      # it is gitignored: it is absent from a fresh clone, and COPYing a missing
+      # or empty directory fails silently — the build succeeds and every image
+      # 404s. Mounting also means updating the bank is an rsync, not a rebuild.
+      # Read-only: the app only ever serves these.
+      - ./random-imgs/banco-imagenes:/app/random-imgs/banco-imagenes:ro
+      #
+      # The source tree is deliberately NOT bind-mounted here — that would
+      # shadow the /app/dist built into the image.
     environment:
       # Belt-and-braces with the error handler in src/app.ts: Express's default
       # finalhandler only omits err.stack from error responses when this is set.

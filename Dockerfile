@@ -43,10 +43,12 @@ COPY migrations ./migrations
 # Served by express.static in app.ts.
 COPY admin ./admin
 COPY public ./public
-# Backs the /banco mount. Gitignored, so on a fresh VPS clone this directory has
-# to be copied to the host out of band before building — otherwise the home
-# canvas loads with no images and the build still succeeds silently.
-COPY random-imgs/banco-imagenes ./random-imgs/banco-imagenes
+
+# random-imgs/banco-imagenes is deliberately NOT copied in. It is gitignored, so
+# a fresh clone does not have it, and COPY of an empty directory succeeds — the
+# image built clean and every /banco/ request 404'd, with nothing in the build
+# log to say why. It is a bind mount in docker-compose.yml instead, which also
+# means new images land with an rsync rather than a full rebuild.
 
 EXPOSE 3000
 CMD ["npm", "start"]
