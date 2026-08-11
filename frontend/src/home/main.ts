@@ -151,19 +151,44 @@ Promise.all([
 		if (feedEl) feedEl.style.display = "block";
 	});
 
+// Decorative stand-ins used when the feed is empty — a brand-new install, or a
+// database that has not been populated yet.
+//
+// The map IS the landing page, so bailing out on an empty feed left the whole
+// screen blank: no grid, no compass, no rulers, nothing. That is indistinguishable
+// from a JavaScript error, and it is what a fresh deploy shows before any content
+// is entered. Rendering the canvas with image-only items keeps the page looking
+// like itself; they carry no title and their link is inert (see mouseReleased).
+//
+// Returns nothing when there are no banco images either, so the genuine empty
+// state in renderMobile() still has a path to fire.
+function placeholderFeed(): FeedItem[] {
+	if (!bancoImages.length) return [];
+	return Array.from({ length: MAP_ITEM_COUNT }, (_, i) => ({
+		id: -1 - i,
+		type: "blog" as const,
+		title: "",
+		image: null,
+		date_created: "",
+		slug: "",
+		link: "#",
+	}));
+}
+
 function applyView() {
-	if (!feedData.length) return;
+	const data = feedData.length ? feedData : placeholderFeed();
+	if (!data.length) return;
 	const mobile = window.innerWidth < 768;
 
 	if (mobile) {
 		if (!mobileBuilt) {
-			renderMobile(feedData);
+			renderMobile(data);
 			mobileBuilt = true;
 		}
 		enterMobileView();
 	} else {
 		if (!desktopBuilt) {
-			buildCanvasItems(feedData);
+			buildCanvasItems(data);
 			desktopBuilt = true;
 		}
 		enterDesktopView();
@@ -515,7 +540,10 @@ if (window.innerWidth >= 768) {
 			const dx = Math.abs(mouseX - dragStartX);
 			const dy = Math.abs(mouseY - dragStartY);
 			if (dx < 5 && dy < 5) {
-				window.location.href = items[hoveredItem].link;
+				// Placeholder items (empty feed) carry "#" — navigating there does
+				// nothing but appends a hash to the URL, so skip it entirely.
+				const href = items[hoveredItem].link;
+				if (href && href !== "#") window.location.href = href;
 			}
 		}
 		isDragging = false;
