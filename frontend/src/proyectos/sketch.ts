@@ -36,15 +36,24 @@ const MARGIN = 12;            // px between the canvas edge and the band stack
 const EMA_FACTOR = 0.5;       // per-sample smoothing so curves flow, not zigzag
 
 // Glyph geometry is derived from the strip a band gets rather than fixed, so
-// twelve trails stay separable in a 45vh hero the way six did at 18px. Clamped
-// at both ends: never so small it reads as noise, never back to a glyph taller
-// than its own strip.
-const SYMBOL_RATIO = 0.34;        // of band height
-const MIN_SYMBOL_SIZE = 6;
-const MAX_SYMBOL_SIZE = 14;
-const STAMP_SPACING_RATIO = 0.6;  // of symbol size — tighter than the glyph, so
-                                  // consecutive stamps overlap a bit within a trail
+// twelve trails scale with the hero instead of being tuned for one size.
+// Clamped at both ends: never so small it reads as grain, never so large a
+// bogey swallows its neighbours' strips.
+const SYMBOL_RATIO = 0.5;         // of band height
+const MIN_SYMBOL_SIZE = 8;
+const MAX_SYMBOL_SIZE = 20;
+const STAMP_SPACING_RATIO = 1.4;  // of symbol size — wider than the glyph, so a
+                                  // trail reads as separate bogeys dropped along
+                                  // the curve rather than a continuous inked line
 const STRIP_PADDING_RATIO = 0.18; // keep the curve this far from strip top/bottom
+
+// Per-stamp variation, as ± fractions of size and step. An even line of
+// identical marks reads as a printed rule; scattering both makes the trail look
+// plotted. Both are driven by stampNoise() rather than Math.random() — a trail
+// is redrawn from scratch every frame, so anything genuinely random would
+// re-roll 60 times a second and boil.
+const SIZE_JITTER = 0.4;
+const SPACING_JITTER = 0.5;
 
 // Per-band trail rotation, degrees, index-aligned with BAND_RANGES. A knob to
 // experiment with — the bass keeps its 45° diagonal and the high-mid its
@@ -59,6 +68,16 @@ const bogeyGlob = import.meta.glob("./bogeys/*.png", {
 	query: "?url",
 	import: "default",
 }) as Record<string, string>;
+
+// Deterministic value in [0, 1) for one stamp, keyed by band, time-slice column
+// and the stamp's index within that column's segment. The same stamp resolves to
+// the same number on every frame, so a trail varies along its length while
+// holding still — and none of the three inputs shift when a gap opens elsewhere
+// in the band, so existing bogeys don't jump when new audio arrives.
+function stampNoise(band: number, col: number, k: number): number {
+	const n = Math.sin(band * 12.9898 + col * 78.233 + k * 37.719) * 43758.5453;
+	return n - Math.floor(n);
+}
 
 function urlFor(filename: string): string {
 	const url = bogeyGlob[`./bogeys/${filename}`];
@@ -200,13 +219,13 @@ export function createBogeySketch(analyser: AnalyserNode, containerEl?: HTMLElem
 			return { points };
 		}
 
-		function stamp(img: any, x: number, y: number) {
+		function stamp(img: any, x: number, y: number, size: number) {
 			// Cheap bounds guard before the image call. fitTrail() keeps rotated
 			// trails inside the hero, but a curve can still poke past an edge.
-			if (x < -symbolSize || x > p.width + symbolSize || y < -symbolSize || y > p.height + symbolSize) {
+			if (x < -size || x > p.width + size || y < -size || y > p.height + size) {
 				return;
 			}
-			p.image(img, x - symbolSize / 2, y - symbolSize / 2, symbolSize, symbolSize);
+			p.image(img, x - size / 2, y - size / 2, size, size);
 		}
 
 		// Rotation and uniform scaling are both linear about the same centre, so
@@ -226,8 +245,11 @@ export function createBogeySketch(analyser: AnalyserNode, containerEl?: HTMLElem
 		// its rotated bounding box fit inside the image. Unrotated bands are
 		// already inside it by construction and come back 1.
 		function fitTrail(cosT: number, sinT: number, stripCenterY: number) {
-			const trailW = (MAX_TIME_SLICES - 1) * timeSliceWidth + symbolSize;
-			const trailH = bandHeight + symbolSize;
+			// Budget for the largest a jittered stamp can come out, not the nominal
+			// size, so the containment guarantee survives the variation.
+			const widest = symbolSize * (1 + SIZE_JITTER);
+			const trailW = (MAX_TIME_SLICES - 1) * timeSliceWidth + widest;
+			const trailH = bandHeight + widest;
 			const halfW = (trailW * Math.abs(cosT) + trailH * Math.abs(sinT)) / 2;
 			const halfH = (trailW * Math.abs(sinT) + trailH * Math.abs(cosT)) / 2;
 			// The strip sits off-centre, and rotation swings that offset around
@@ -260,11 +282,19 @@ export function createBogeySketch(analyser: AnalyserNode, containerEl?: HTMLElem
 
 				// Project a local (unrotated) point to screen space and stamp it.
 				const project = angleDeg === 0
-					? (lx: number, ly: number) => stamp(img, lx, ly)
-					: (lx: number, ly: number) => {
+					? (lx: number, ly: number, size: number) => stamp(img, lx, ly, size)
+					: (lx: number, ly: number, size: number) => {
 						const pt = placePoint(lx, ly, fit, cosT, sinT, cx, cy);
-						stamp(img, pt.x, pt.y);
+						stamp(img, pt.x, pt.y, size);
 					};
+
+				// Both read the same stamp's noise, offset so size and step don't
+				// move together (a big bogey always followed by a long gap would be
+				// its own kind of uniform).
+				const sizeFor = (col: number, k: number) =>
+					symbolSize * (1 + SIZE_JITTER * (stampNoise(band, col, k) * 2 - 1));
+				const stepFor = (col: number, k: number) =>
+					spacing * (1 + SPACING_JITTER * (stampNoise(band + 31, col, k) * 2 - 1));
 
 				let hasPrev = false;
 				let prevX = 0;
@@ -285,19 +315,31 @@ export function createBogeySketch(analyser: AnalyserNode, containerEl?: HTMLElem
 					// newest write — never connect across that jump in time.
 					const seamBreak = col === colCursor;
 
+					// k indexes the stamps dropped inside this column's segment, and
+					// resets with it — jitter keyed on (band, col, k) then stays put
+					// for as long as that column's sample survives in the ring.
+					let k = 0;
+
 					if (!hasPrev || seamBreak) {
-						project(x, y);
+						project(x, y, sizeFor(col, k));
 						sinceLastStamp = 0;
 					} else {
 						const dx = x - prevX;
 						const dy = y - prevPtY;
 						const segLen = Math.sqrt(dx * dx + dy * dy);
 						let travelled = 0;
-						while (segLen - travelled >= spacing - sinceLastStamp) {
-							travelled += spacing - sinceLastStamp;
+						// Distance still owed before the next stamp. Floored at zero:
+						// with a varying step, the debt carried in from the previous
+						// segment can exceed this stamp's step, and a negative step
+						// would place the glyph behind the segment it belongs to.
+						let toNext = Math.max(0, stepFor(col, k) - sinceLastStamp);
+						while (segLen - travelled >= toNext) {
+							travelled += toNext;
 							const t = travelled / segLen;
-							project(prevX + dx * t, prevPtY + dy * t);
+							project(prevX + dx * t, prevPtY + dy * t, sizeFor(col, k));
 							sinceLastStamp = 0;
+							k++;
+							toNext = stepFor(col, k);
 						}
 						sinceLastStamp += segLen - travelled;
 					}
