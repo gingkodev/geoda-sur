@@ -175,7 +175,7 @@
       <h3 id="modal-title" class="text-xs tracking-widest uppercase"></h3>
       <div id="modal-fields" class="space-y-3"></div>
       <div class="flex gap-3">
-        <button id="modal-save" class="text-xs tracking-wider uppercase border border-ink px-4 py-2 hover:bg-ink hover:text-paper transition-colors">Guardar</button>
+        <button id="modal-save" class="text-xs tracking-wider uppercase border border-ink px-4 py-2 hover:bg-ink hover:text-paper transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-ink">Guardar</button>
         <button id="modal-cancel" class="text-xs tracking-wider uppercase px-4 py-2 text-neutral-400 hover:text-ink transition-colors">Cancelar</button>
       </div>
     </div>
@@ -188,6 +188,19 @@ let currentTab = 'projects';
 let modalEntity = null;
 let modalId = null;
 let quillInstances = {};
+let pendingUploads = 0;
+
+// Guardar is held closed while any file upload is in flight. The hidden input
+// that carries the stored URL is only filled once the upload resolves, so
+// saving mid-upload wrote the entity without its image or audio — silently,
+// since the form itself looked complete.
+function setUploadsPending(delta) {
+  pendingUploads = Math.max(0, pendingUploads + delta);
+  const btn = document.getElementById('modal-save');
+  const busy = pendingUploads > 0;
+  btn.disabled = busy;
+  btn.textContent = busy ? 'Subiendo…' : 'Guardar';
+}
 
 // --- Flash ---
 function flash(msg, type = 'ok') {
@@ -360,6 +373,8 @@ async function openModal(entity, id) {
   modalEntity = entity;
   modalId = id;
   quillInstances = {};
+  pendingUploads = 0;
+  setUploadsPending(0); // re-enable Guardar in case the last modal closed mid-upload
   const schema = schemas[entity];
   const labels = entityLabels[entity];
   const title = id ? `Editar ${labels.singular}` : `Nuevo ${labels.singular}`;
@@ -536,8 +551,12 @@ async function openModal(entity, id) {
     ).join('');
   }
 
-  // File upload handlers
-  fieldsEl.querySelectorAll('input[type="file"]').forEach(input => {
+  // File upload handlers.
+  // Scoped to inputs that declare an upload key: the entity-images manager
+  // renders its own file input into the same container and has its own handler
+  // below, and this one threw on it (no key, so no status element to write to)
+  // every time a service image was picked.
+  fieldsEl.querySelectorAll('input[type="file"][data-upload-key]').forEach(input => {
     input.addEventListener('change', async (e) => {
       const fileInput = e.target;
       const key = fileInput.dataset.uploadKey;
@@ -556,6 +575,7 @@ async function openModal(entity, id) {
       }
 
       statusEl.innerHTML = '<span class="text-neutral-400">Subiendo...</span>';
+      setUploadsPending(1);
 
       const formData = new FormData();
       formData.append('file', file);
@@ -587,6 +607,8 @@ async function openModal(entity, id) {
         }
       } catch (err) {
         statusEl.innerHTML = `<span class="text-red-600">${esc(err.message || 'Error al subir')}</span>`;
+      } finally {
+        setUploadsPending(-1);
       }
     });
   });
@@ -612,22 +634,27 @@ async function openModal(entity, id) {
       const file = e.target.files[0];
       if (!file) return;
       const statusEl = document.getElementById('entity-image-status');
-      const uploaded = await uploadImageFile(file, statusEl);
-      e.target.value = '';
-      if (!uploaded) return;
-      const captionEl = document.getElementById('entity-image-caption');
-      const caption = captionEl.value.trim() || null;
+      setUploadsPending(1);
       try {
-        await apiFetch(`/${modalEntity}/${modalId}/images`, {
-          method: 'POST',
-          body: JSON.stringify({ img_url: uploaded.url, mobile_img_url: uploaded.mobileUrl, caption }),
-        });
-        captionEl.value = '';
-        flash('imagen agregada');
+        const uploaded = await uploadImageFile(file, statusEl);
+        e.target.value = '';
+        if (!uploaded) return;
+        const captionEl = document.getElementById('entity-image-caption');
+        const caption = captionEl.value.trim() || null;
+        try {
+          await apiFetch(`/${modalEntity}/${modalId}/images`, {
+            method: 'POST',
+            body: JSON.stringify({ img_url: uploaded.url, mobile_img_url: uploaded.mobileUrl, caption }),
+          });
+          captionEl.value = '';
+          flash('imagen agregada');
+        } finally {
+          // Re-syncs the cap state (disabled inputs, "máx." note) even on
+          // failure — e.g. another tab already hit the cap in the meantime.
+          await refreshEntityImages();
+        }
       } finally {
-        // Re-syncs the cap state (disabled inputs, "máx." note) even on
-        // failure — e.g. another tab already hit the cap in the meantime.
-        await refreshEntityImages();
+        setUploadsPending(-1);
       }
     });
   }
@@ -719,6 +746,8 @@ document.getElementById('modal').addEventListener('click', e => { if (e.target =
 function closeModal() {
   document.getElementById('modal').classList.add('hidden');
   quillInstances = {};
+  pendingUploads = 0;
+  setUploadsPending(0);
   modalEntity = null;
   modalId = null;
 }
