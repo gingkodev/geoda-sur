@@ -85,6 +85,7 @@ function moveSketchTo(slug: string) {
 		if (canvas) {
 			container.appendChild(canvas);
 			sketchInstance.resizeCanvas(container.clientWidth, container.clientHeight);
+			sketchInstance.relayout?.();
 		}
 	} else if (analyserReady) {
 		const analyser = getAnalyser(audioEl);
