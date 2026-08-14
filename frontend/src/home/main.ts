@@ -79,6 +79,7 @@ const PIXELS_PER_DEGREE = 30;
 initCursor();
 
 let feedData: FeedItem[] = [];
+let feedLoaded = false;
 let mobileBuilt = false;
 let desktopBuilt = false;
 
@@ -129,6 +130,7 @@ Promise.all([
 	.then(([res, manifest]) => {
 		feedData = res.data;
 		bancoImages = manifest;
+		feedLoaded = true;
 		applyView();
 
 		// Pre-cache all banco images in the background via service worker
@@ -160,8 +162,9 @@ Promise.all([
 // is entered. Rendering the canvas with image-only items keeps the page looking
 // like itself; they carry no title and their link is inert (see mouseReleased).
 //
-// Returns nothing when there are no banco images either, so the genuine empty
-// state in renderMobile() still has a path to fire.
+// Returns nothing when there are no banco images either — there is nothing to
+// draw the stand-ins with — and the genuine empty state takes over: the canvas
+// on desktop, renderMobile()'s "No items yet" on the phone.
 function placeholderFeed(): FeedItem[] {
 	if (!bancoImages.length) return [];
 	return Array.from({ length: MAP_ITEM_COUNT }, (_, i) => ({
@@ -176,17 +179,27 @@ function placeholderFeed(): FeedItem[] {
 }
 
 function applyView() {
+	// applyView also runs on resize, which can fire long before the feed request
+	// settles. Building then would latch mobileBuilt/desktopBuilt on an empty
+	// render that nothing ever rebuilds.
+	if (!feedLoaded) return;
+
 	const data = feedData.length ? feedData : placeholderFeed();
-	if (!data.length) return;
 	const mobile = window.innerWidth < 768;
 
 	if (mobile) {
+		// Runs even with nothing to show. The stand-ins from placeholderFeed() are
+		// what an empty database is supposed to look like here too, and when there
+		// are none renderMobile() owns the empty state — bailing out before it
+		// left the phone on a blank white screen, no images and no message, while
+		// the desktop map drew its stand-ins normally.
 		if (!mobileBuilt) {
 			renderMobile(data);
 			mobileBuilt = true;
 		}
 		enterMobileView();
 	} else {
+		if (!data.length) return;
 		if (!desktopBuilt) {
 			buildCanvasItems(data);
 			desktopBuilt = true;
@@ -242,13 +255,35 @@ function renderMobile(data: FeedItem[]) {
 
 	// --- Scrolling left side: images from banco ---
 	const widths = ["90%", "70%", "80%", "95%", "65%", "85%", "75%"];
+	const aspects = [1.3, 0.75, 1, 1.15, 0.85];
 	const shuffled = [...bancoImages].sort(() => Math.random() - 0.5);
+
+	// Stands in for a banco image that is missing or fails to load. Without it the
+	// anchor stays an empty box: the map and the desktop scroll view both fall
+	// back to a ruled card, so the phone showed a blank column where they showed
+	// content — most visibly on an empty database, where every slot is a stand-in.
+	function fillWithRuledCard(a: HTMLAnchorElement, index: number) {
+		const aspect = aspects[index % aspects.length];
+		a.className = "shrink-0 border border-ink bg-white";
+		const lines = document.createElement("div");
+		lines.className = "w-full flex flex-col gap-1 p-2.5";
+		lines.style.aspectRatio = `1 / ${aspect}`;
+		const numLines = Math.floor(aspect * 12);
+		for (let l = 0; l < numLines; l++) {
+			const ln = document.createElement("div");
+			ln.className = "h-px bg-rule";
+			lines.appendChild(ln);
+		}
+		a.replaceChildren(lines);
+	}
 
 	function buildImages(offset: number) {
 		for (let i = 0; i < data.length; i++) {
 			const item = data[i % data.length];
 			const a = document.createElement("a");
-			a.href = item.link;
+			// Stand-ins carry "#" — left hrefless so tapping one does nothing,
+			// matching how the map skips them in mouseReleased.
+			if (item.link && item.link !== "#") a.href = item.link;
 			a.className = "shrink-0";
 			a.style.width = widths[(i + offset) % widths.length];
 
@@ -262,7 +297,10 @@ function renderMobile(data: FeedItem[]) {
 				img.alt = "";
 				img.className = "w-full h-auto block";
 				img.loading = "lazy";
+				img.onerror = () => fillWithRuledCard(a, i + offset);
 				a.appendChild(img);
+			} else {
+				fillWithRuledCard(a, i + offset);
 			}
 
 			track.appendChild(a);
