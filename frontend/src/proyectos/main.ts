@@ -138,11 +138,15 @@ function addLangToggle() {
 		sidebar.insertAdjacentHTML("beforeend", html);
 	}
 
-	// Mobile nav
+	// Mobile nav — same palette as the desktop sidebar. Both float over the
+	// darkened hero image, so the toggle has to read light-on-dark: the mobile
+	// variant used to invert to text-ink, which left the *unselected* language
+	// as black type on a dark photo, i.e. invisible. The project links right
+	// above it are text-cream too, so this also stops the nav from splitting
+	// into two color schemes.
 	const mobileNav = document.getElementById("mobile-project-nav");
 	if (mobileNav && isMobile) {
-		const mobileHtml = html.replace(/text-cream/g, "text-ink").replace(/bg-cream text-ink/g, "bg-ink text-cream");
-		mobileNav.insertAdjacentHTML("beforeend", mobileHtml);
+		mobileNav.insertAdjacentHTML("beforeend", html);
 	}
 
 	document.querySelectorAll<HTMLButtonElement>(".lang-btn").forEach((btn) => {
